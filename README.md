@@ -1,36 +1,35 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SEVEN DEADLY SINS
 
-## Getting Started
+SEVEN FACES. SEVEN DESIRES. ONE HUMAN NATURE.
 
-First, run the development server:
+互動式數位藝術網站：七顆粒子人頭、hover 色彩揭示、點擊後重建為完整人形，並展開編輯式的罪名介紹。
 
-```bash
+## Tech Stack
+Next.js (App Router) · TypeScript · Tailwind CSS · Three.js · React Three Fiber · Drei · GSAP · Lucide
+
+## Development
+```cmd
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Checks
+```cmd
+npm run lint
+npm run build
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Routes
+`/` · `/sins/lust` · `/sins/pride` · `/sins/greed` · `/sins/gluttony` · `/sins/sloth` · `/sins/wrath` · `/sins/envy`
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Content
+所有角色文案與配色集中在 `src/data/sins.ts`。
 
-## Learn More
+## Deployment
+推送至 GitHub，於 Vercel 匯入此 repo，框架自動偵測為 Next.js，無需額外設定。
 
-To learn more about Next.js, take a look at the following resources:
+## Docs
+見 `docs/` 資料夾。
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Roadmap
+見 `docs/DEVELOPMENT_ROADMAP.md`。

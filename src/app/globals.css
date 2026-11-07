@@ -1,0 +1,88 @@
+@import "tailwindcss";
+
+/* ============================================================
+   全站設計 Token：所有顏色只在這裡改
+   每個角色的 --accent 由頁面依 sins.ts 動態注入
+   ============================================================ */
+:root {
+  --bg: #080708;
+  --bg-2: #120b10;
+  --burgundy: #32101f;
+  --ink: #f0e8eb;
+  --ink-2: #a69aa0;
+  --particle: #e9e5e7;
+
+  /* 預設強調色（首頁）；角色頁會覆蓋 */
+  --accent: #e9e5e7;
+  --accent-2: #32101f;
+  --accent-glow: #e9e5e7;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-2: var(--bg-2);
+  --color-burgundy: var(--burgundy);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-particle: var(--particle);
+  --color-accent: var(--accent);
+  --color-accent-2: var(--accent-2);
+  --color-accent-glow: var(--accent-glow);
+
+  --font-display: var(--font-cormorant), var(--font-noto-serif-tc), serif;
+  --font-zh: var(--font-noto-serif-tc), "PMingLiU", "Songti TC", serif;
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--ink);
+  min-height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* 極淡的類比掃描線，全站覆蓋，不攔截點擊 */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 50;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.018) 0,
+    rgba(255, 255, 255, 0.018) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+}
+
+/* 鍵盤焦點可見 */
+:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 4px;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+/* 減少動態 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
