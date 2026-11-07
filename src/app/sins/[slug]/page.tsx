@@ -6,6 +6,8 @@ import { SINS, SIN_COUNT, getAdjacentSins, getSinBySlug } from "@/data/sins";
 
 type Props = { params: Promise<{ slug: string }> };
 
+export const instant = false;
+
 export function generateStaticParams() {
   return SINS.map((s) => ({ slug: s.slug }));
 }
