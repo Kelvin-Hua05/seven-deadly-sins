@@ -33,6 +33,9 @@ export function PersistentScene() {
   const sin = slugIndex >= 0 ? SINS[slugIndex] : null;
   const sinSlug = sin?.slug ?? null;
 
+  // 只有首頁與七個角色頁才顯示 3D 場景；其他網址（例如 404）不繪製
+  const onKnownRoute = pathname === "/" || slugIndex >= 0;
+
   // 把目前角色的色彩寫入全站 CSS 變數
   useEffect(() => {
     if (!sin) return;
@@ -63,8 +66,8 @@ export function PersistentScene() {
     [router, reduced]
   );
 
-  if (!webgl) return null;
-
+  if (!webgl || !onKnownRoute) return null;
+  
   const ambientOn = sin !== null && signal.readySlug === sin.slug;
 
   return (
