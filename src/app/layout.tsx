@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Suspense } from "react";
 import {
   Cormorant_Garamond,
   Inter,
@@ -7,6 +8,7 @@ import {
 } from "next/font/google";
 import "./globals.css";
 import { SITE } from "@/data/sins";
+import { PersistentScene } from "@/components/scene/PersistentScene";
 
 const cormorant = Cormorant_Garamond({
   subsets: ["latin"],
@@ -53,7 +55,13 @@ export default function RootLayout({
       lang="zh-Hant"
       className={`${cormorant.variable} ${notoSerifTC.variable} ${inter.variable} ${jetbrains.variable}`}
     >
-      <body>{children}</body>
+      <body>
+        {/* 整站共用的 3D 場景：換頁時不會被銷毀 */}
+        <Suspense fallback={null}>
+          <PersistentScene />
+        </Suspense>
+        <div className="pointer-events-none relative z-10">{children}</div>
+      </body>
     </html>
   );
 }

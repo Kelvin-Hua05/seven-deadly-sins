@@ -86,3 +86,71 @@ body::after {
     scroll-behavior: auto !important;
   }
 }
+
+/* ───────── Phase 3 ───────── */
+:root {
+  /* 角色主體光圈中心與半徑；場景載入後會被覆寫 */
+  --fx: 70vw;
+  --fy: 34vh;
+  --fr: 30vh;
+}
+
+.fade-in {
+  animation: fadeIn 1.8s ease 0.6s both;
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* 角色頁的環境光：隨揭示淡入 */
+.ambient-glow {
+  opacity: 0;
+  transition: opacity 1.8s ease;
+  background: radial-gradient(
+    circle at var(--fx) var(--fy),
+    color-mix(in srgb, var(--accent-2) 70%, transparent) 0%,
+    transparent 62%
+  );
+}
+.ambient-glow[data-on="1"] {
+  opacity: 0.8;
+}
+
+/* 編輯式排版 */
+.edit-left {
+  left: 6vw;
+  top: 20%;
+  width: min(26rem, 38vw);
+}
+.phrase-anchor {
+  left: var(--px);
+  top: var(--py);
+}
+@media (orientation: landscape) {
+  .phrase-right {
+    transform: translateX(-100%);
+    text-align: right;
+  }
+}
+@media (orientation: portrait) {
+  .edit-left {
+    left: 1.5rem;
+    right: 1.5rem;
+    top: auto;
+    bottom: 4.5rem;
+    width: auto;
+  }
+  .phrase-anchor {
+    left: var(--pxp);
+    top: var(--pyp);
+  }
+}
+
+.phrase-drift {
+  animation: drift var(--dur, 7s) ease-in-out var(--delay, 0s) infinite;
+}
+@keyframes drift {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(0, -6px, 0); }
+}

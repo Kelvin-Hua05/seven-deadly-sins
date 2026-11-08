@@ -7,6 +7,8 @@ export interface DeviceCapability {
   isMobile: boolean;
   /** 每顆頭的粒子數 */
   particleCount: number;
+  /** 首頁顯示的皮膚粒子比例（0–1） */
+  homeDensity: number;
   dprMax: number;
 }
 
@@ -37,7 +39,8 @@ export function useDeviceCapability(): DeviceCapability {
     return {
       isTouch,
       isMobile,
-      particleCount: isMobile ? 3500 : low ? 5000 : 9000,
+      particleCount: isMobile ? 3000 : low ? 8000 : 12000,
+      homeDensity: isMobile ? 0.5 : 0.7,
       dprMax: isMobile ? 1.5 : 2,
     };
   }, [key]);

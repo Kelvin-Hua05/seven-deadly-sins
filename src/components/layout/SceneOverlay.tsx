@@ -3,18 +3,23 @@
 import Link from "next/link";
 import { SINS, SITE } from "@/data/sins";
 import { useDeviceCapability } from "@/hooks/useDeviceCapability";
+import { useSceneSignal } from "@/hooks/useSceneSignal";
 
 export function SceneOverlay() {
   const cap = useDeviceCapability();
+  const { leavingHome } = useSceneSignal();
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-10 flex flex-col justify-between p-6 sm:p-10">
+    <div
+      className={`fade-in pointer-events-none absolute inset-0 z-10 flex flex-col justify-between p-6 transition-opacity duration-700 sm:p-10 ${
+        leavingHome ? "opacity-0" : "opacity-100"
+      }`}
+    >
       <div className="flex items-start justify-between gap-6">
         <p className="font-mono text-[10px] tracking-[0.3em] text-ink-2">
           {SITE.meta}
         </p>
 
-        {/* 數字導覽：不顯示罪名；同時提供鍵盤操作 */}
         <nav
           aria-label="Subjects"
           className="pointer-events-auto flex gap-3 font-mono text-[10px] tracking-[0.2em] text-ink-2/60"

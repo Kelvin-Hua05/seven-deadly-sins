@@ -6,12 +6,13 @@ import { FloatingHeads } from "./FloatingHeads";
 import { SceneEnvironment } from "./SceneEnvironment";
 
 interface Props {
+  slugIndex: number;
   cap: DeviceCapability;
   reducedMotion: boolean;
   onEnter: (slug: string) => void;
 }
 
-export default function MainScene({ cap, reducedMotion, onEnter }: Props) {
+export default function MainScene({ slugIndex, cap, reducedMotion, onEnter }: Props) {
   return (
     <Canvas
       className="absolute inset-0"
@@ -22,6 +23,7 @@ export default function MainScene({ cap, reducedMotion, onEnter }: Props) {
       <color attach="background" args={["#080708"]} />
       <SceneEnvironment motion={reducedMotion ? 0 : 1} />
       <FloatingHeads
+        slugIndex={slugIndex}
         cap={cap}
         reducedMotion={reducedMotion}
         onEnter={onEnter}

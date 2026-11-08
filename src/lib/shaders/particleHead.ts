@@ -1,3 +1,4 @@
+/* ───────── 頭 ───────── */
 export const headVertex = /* glsl */ `
 uniform float uTime;
 uniform float uPixelRatio;
@@ -5,30 +6,40 @@ uniform float uSize;
 uniform float uReveal;
 uniform float uMotion;
 uniform float uDissolve;
+uniform float uDensity;
+uniform float uScanY;
+uniform float uScanOn;
 
 attribute float aTone;
 attribute float aSeed;
+attribute float aKind;
 
 varying float vTone;
 varying float vDepth;
+varying float vKind;
+varying float vScan;
 
 void main() {
+  // 皮膚粒子依密度抽稀；亮線(kind>0)永遠保留
+  if (aKind < 0.5 && aSeed > uDensity) {
+    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+    gl_PointSize = 0.0;
+    return;
+  }
+
   vec3 p = position;
 
-  // 微小粒子抖動，hover 時更明顯
   float t = uTime * 0.6 + aSeed * 6.2831853;
   vec3 jitter = vec3(
     sin(t * 1.3 + aSeed * 10.0),
     cos(t * 1.1 + aSeed * 7.0),
     sin(t * 0.9 + aSeed * 13.0)
   );
-  p += jitter * (0.004 + 0.014 * uReveal) * uMotion;
+  p += jitter * (0.003 + 0.01 * uReveal) * uMotion;
 
-  // 類比訊號橫向干擾帶
   float band = smoothstep(0.985, 1.0, sin(p.y * 4.0 - uTime * 0.8));
   p.x += band * 0.03 * uMotion;
 
-  // 溶解：粒子向外飄散
   vec3 dir = normalize(position + vec3(0.0001, 0.0002, 0.0003));
   p += dir * uDissolve * (0.6 + aSeed) * 1.4;
   p.y += uDissolve * aSeed * 0.5;
@@ -36,12 +47,18 @@ void main() {
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
   gl_Position = projectionMatrix * mv;
 
-  float size = uSize * (0.45 + aTone * 1.1) * (1.0 + uReveal * 0.35);
+  float dy = position.y - uScanY;
+  float scan = exp(-(dy * dy) / 0.012) * uScanOn;
+
+  float size = uSize * (0.5 + aTone * 0.9) * (1.0 + uReveal * 0.25) * (1.0 + scan * 1.2);
+  if (aKind > 0.5) size *= 1.15;
   size *= (1.0 - uDissolve * 0.6);
   gl_PointSize = size * uPixelRatio * (8.0 / -mv.z);
 
   vTone = aTone;
   vDepth = -mv.z;
+  vKind = aKind;
+  vScan = scan;
 }
 `;
 
@@ -53,26 +70,116 @@ uniform float uOpacity;
 
 varying float vTone;
 varying float vDepth;
+varying float vKind;
+varying float vScan;
 
 void main() {
   vec2 c = gl_PointCoord - 0.5;
   float d = length(c);
   if (d > 0.5) discard;
-  float soft = 1.0 - smoothstep(0.05, 0.5, d);
+  float soft = 1.0 - smoothstep(0.1, 0.5, d);
 
-  vec3 gray = vec3(0.91, 0.90, 0.91) * (0.15 + vTone * 0.95);
-  vec3 tint = mix(uAccent2, uAccent, smoothstep(0.15, 0.85, vTone));
-  vec3 colored = tint * (0.4 + vTone * 1.2);
+  vec3 gray = vec3(0.91, 0.90, 0.91) * (0.12 + vTone * 0.9);
+  vec3 tint = mix(uAccent2, uAccent, smoothstep(0.1, 0.9, vTone));
+  vec3 colored = tint * (0.35 + vTone * 1.25);
   vec3 col = mix(gray, colored, smoothstep(0.0, 1.0, uReveal));
 
+  // 眼睛：揭示時發光
+  if (vKind > 1.5 && vKind < 2.5) col += uAccent * 0.9 * uReveal;
+  col += uAccent * vScan * 1.6;
+
   float depthFade = mix(0.55, 1.0, 1.0 - smoothstep(9.0, 15.0, vDepth));
-  float a = soft * (0.2 + vTone * 0.8) * (1.0 + uReveal * 0.5) * uOpacity * depthFade * 0.85;
+  float a = soft * (0.16 + vTone * 0.7) * (1.0 + uReveal * 0.5) * uOpacity * depthFade * 0.8
+          + soft * vScan * 0.4 * uOpacity;
 
   gl_FragColor = vec4(col, a);
   #include <colorspace_fragment>
 }
 `;
 
+/* ───────── 身體：掃描重建 ───────── */
+export const bodyVertex = /* glsl */ `
+uniform float uTime;
+uniform float uPixelRatio;
+uniform float uSize;
+uniform float uMotion;
+uniform float uScanY;
+uniform float uScanOn;
+
+attribute float aTone;
+attribute float aSeed;
+attribute float aKind;
+
+varying float vTone;
+varying float vKind;
+varying float vFresh;
+varying float vArrive;
+varying float vVis;
+
+void main() {
+  // 掃描線以下尚未生成；線以上的粒子由散落位置匯聚到定位
+  float a = clamp((position.y - uScanY) / 0.55, 0.0, 1.0);
+  float e = a * a * (3.0 - 2.0 * a);
+
+  vec3 sc = vec3(sin(aSeed * 91.7), cos(aSeed * 47.3) * 0.6 + 0.3, sin(aSeed * 23.1)) * (0.4 + aSeed * 0.8);
+  vec3 p = position + sc * (1.0 - e);
+
+  float t = uTime * 0.6 + aSeed * 6.2831853;
+  p += vec3(sin(t * 1.3 + aSeed * 10.0), cos(t * 1.1 + aSeed * 7.0), sin(t * 0.9 + aSeed * 13.0)) * 0.004 * uMotion;
+  float band = smoothstep(0.985, 1.0, sin(p.y * 4.0 - uTime * 0.8));
+  p.x += band * 0.02 * uMotion;
+
+  vec4 mv = modelViewMatrix * vec4(p, 1.0);
+  gl_Position = projectionMatrix * mv;
+
+  float dy = position.y - uScanY;
+  float fresh = exp(-(dy * dy) / 0.012) * uScanOn;
+
+  float size = uSize * (0.5 + aTone * 0.9) * (1.0 + fresh * 1.5);
+  if (aKind > 0.5) size *= 1.15;
+  gl_PointSize = size * uPixelRatio * (8.0 / -mv.z);
+
+  vTone = aTone;
+  vKind = aKind;
+  vFresh = fresh;
+  vArrive = e;
+  vVis = smoothstep(uScanY - 0.1, uScanY + 0.05, position.y);
+}
+`;
+
+export const bodyFragment = /* glsl */ `
+uniform vec3 uAccent;
+uniform vec3 uAccent2;
+uniform float uOpacity;
+
+varying float vTone;
+varying float vKind;
+varying float vFresh;
+varying float vArrive;
+varying float vVis;
+
+void main() {
+  vec2 c = gl_PointCoord - 0.5;
+  float d = length(c);
+  if (d > 0.5) discard;
+  float soft = 1.0 - smoothstep(0.1, 0.5, d);
+
+  vec3 tint = mix(uAccent2, uAccent, smoothstep(0.1, 0.9, vTone));
+  vec3 col = tint * (0.35 + vTone * 1.25);
+  if (vKind > 2.5) {
+    col = mix(uAccent, vec3(1.0), 0.25) * (0.7 + vTone * 0.7);
+  } else if (vKind > 0.5) {
+    col = mix(uAccent, vec3(1.0), 0.5) * (0.5 + vTone * 0.9);
+  }
+  col += uAccent * vFresh * 1.8;
+
+  float a = soft * ((0.14 + vTone * 0.75) * vArrive * 0.85 + vFresh * 0.5 * vVis) * uOpacity;
+  gl_FragColor = vec4(col, a);
+  #include <colorspace_fragment>
+}
+`;
+
+/* ───────── 光暈 / 掃描線平面 ───────── */
 export const haloVertex = /* glsl */ `
 varying vec2 vUv;
 void main() {
@@ -88,13 +195,80 @@ varying vec2 vUv;
 void main() {
   float d = length(vUv - 0.5) * 2.0;
   float glow = exp(-d * d * 3.5);
-  float ring = (1.0 - smoothstep(0.0, 0.02, abs(d - 0.62))) * 0.35;
+  float ring = (1.0 - smoothstep(0.0, 0.025, abs(d - 0.62))) * 0.5;
   float a = (glow * 0.5 + ring) * uIntensity;
   gl_FragColor = vec4(uColor, a);
   #include <colorspace_fragment>
 }
 `;
 
+export const scanFragment = /* glsl */ `
+uniform vec3 uColor;
+uniform float uAlpha;
+varying vec2 vUv;
+void main() {
+  float line = 1.0 - smoothstep(0.0, 0.035, vUv.y);
+  float trail = pow(1.0 - vUv.y, 5.0) * 0.35;
+  float edge = smoothstep(0.0, 0.15, vUv.x) * (1.0 - smoothstep(0.85, 1.0, vUv.x));
+  gl_FragColor = vec4(uColor, (line * 0.9 + trail) * edge * uAlpha);
+  #include <colorspace_fragment>
+}
+`;
+
+/* ───────── 漂浮符號 ───────── */
+export const symbolVertex = /* glsl */ `
+uniform float uTime;
+uniform float uPixelRatio;
+uniform float uBuild;
+attribute float aSeed;
+varying float vSeed;
+varying float vAlpha;
+void main() {
+  vec3 p = position;
+  float t = uTime * 0.12;
+  p.x += sin(t * 2.0 + aSeed * 40.0) * 0.25;
+  p.y += cos(t * 1.7 + aSeed * 25.0) * 0.3;
+  vec4 mv = modelViewMatrix * vec4(p, 1.0);
+  gl_Position = projectionMatrix * mv;
+  gl_PointSize = (10.0 + aSeed * 18.0) * uPixelRatio * (8.0 / -mv.z);
+  vSeed = aSeed;
+  vAlpha = uBuild * (0.25 + 0.5 * fract(aSeed * 7.0));
+}
+`;
+
+export const symbolFragment = /* glsl */ `
+uniform vec3 uColor;
+uniform float uShape;
+uniform float uTime;
+varying float vSeed;
+varying float vAlpha;
+void main() {
+  vec2 c = gl_PointCoord - 0.5;
+  float ang = vSeed * 6.2831853 + uTime * 0.1 * (vSeed - 0.5);
+  float cs = cos(ang);
+  float sn = sin(ang);
+  c = vec2(cs * c.x - sn * c.y, sn * c.x + cs * c.y);
+  float m = 0.0;
+  if (uShape < 0.5) {
+    float e = length(c * vec2(1.0, 1.9));
+    m = (1.0 - smoothstep(0.0, 0.05, abs(e - 0.42)))
+      + (1.0 - smoothstep(0.0, 0.03, abs(c.y))) * step(abs(c.x), 0.3) * 0.8;
+  } else if (uShape < 1.5) {
+    float e = abs(c.x) + abs(c.y) * 1.4;
+    m = 1.0 - smoothstep(0.0, 0.05, abs(e - 0.38));
+  } else {
+    m = max(
+      (1.0 - smoothstep(0.0, 0.04, abs(c.x))) * step(abs(c.y), 0.3),
+      (1.0 - smoothstep(0.0, 0.04, abs(c.y))) * step(abs(c.x), 0.3)
+    );
+  }
+  if (m < 0.02) discard;
+  gl_FragColor = vec4(uColor, clamp(m, 0.0, 1.0) * vAlpha);
+  #include <colorspace_fragment>
+}
+`;
+
+/* ───────── 背景塵埃 ───────── */
 export const dustVertex = /* glsl */ `
 uniform float uTime;
 uniform float uPixelRatio;
