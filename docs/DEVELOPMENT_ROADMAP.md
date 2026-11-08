@@ -1,8 +1,8 @@
 # Roadmap
 
 - [x] Phase 1 Foundation
-- [ ] Phase 2 Homepage（7 顆浮動粒子頭、hover、click）
-- [ ] Phase 3 Lust prototype
-- [ ] Phase 4 其餘六個角色
-- [ ] Phase 5 Polish & optimization
+- [x] Phase 2 Homepage
+- [x] Phase 3 Lust prototype（共用場景、身體重建、掃描、編輯式排版）
+- [x] Phase 5 Polish & optimization（音效、手機版、減少動態、效能、無障礙、角色粒子行為）
 - [ ] Phase 6 Production deployment
+- [ ] Phase 4 六個角色各自的身體造型與環境元素（刻意排在最後）

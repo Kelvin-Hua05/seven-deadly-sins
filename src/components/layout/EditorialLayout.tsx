@@ -9,6 +9,7 @@ import type { Sin } from "@/types/sin";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { useSceneSignal } from "@/hooks/useSceneSignal";
 import { isWebGLAvailable } from "@/lib/webgl";
+import { AudioController } from "@/components/ui/AudioController";
 
 interface NavSin {
   slug: string;
@@ -24,12 +25,15 @@ interface Props {
 
 const noopSubscribe = () => () => {};
 
-/** 四句象徵語環繞光圈：landscape 用 (px,py)，portrait 用 (pxp,pyp) */
+/**
+ * 四句象徵語環繞光圈。
+ * 橫向：px/py；直向（手機）：pxp/pyp。col = 位於光圈左側(l)或右側(r)
+ */
 const PHRASES = [
-  { px: "calc(var(--fx) - var(--fr) * 0.92)", py: "calc(var(--fy) - var(--fr) * 0.72)", pxp: "1.5rem", pyp: "calc(var(--fy) - var(--fr) * 1.05)", side: "right", dur: "7s", delay: "0s" },
-  { px: "calc(var(--fx) + var(--fr) * 0.92)", py: "calc(var(--fy) - var(--fr) * 0.78)", pxp: "58%", pyp: "calc(var(--fy) - var(--fr) * 1.05)", side: "left", dur: "8.5s", delay: "-2s" },
-  { px: "calc(var(--fx) - var(--fr) * 1.0)", py: "calc(var(--fy) + var(--fr) * 0.45)", pxp: "1.5rem", pyp: "calc(var(--fy) + var(--fr) * 0.3)", side: "right", dur: "9s", delay: "-4s" },
-  { px: "calc(var(--fx) + var(--fr) * 1.0)", py: "calc(var(--fy) + var(--fr) * 0.5)", pxp: "58%", pyp: "calc(var(--fy) + var(--fr) * 0.4)", side: "left", dur: "7.5s", delay: "-1s" },
+  { col: "l", px: "calc(var(--fx) - var(--fr) * 0.92)", py: "calc(var(--fy) - var(--fr) * 0.72)", pxp: "1.5rem", pyp: "max(4.75rem, calc(var(--fy) - var(--fr) * 0.95))", dur: "7s", delay: "0s" },
+  { col: "r", px: "calc(var(--fx) + var(--fr) * 0.92)", py: "calc(var(--fy) - var(--fr) * 0.78)", pxp: "calc(100% - 1.5rem)", pyp: "max(4.75rem, calc(var(--fy) - var(--fr) * 0.95))", dur: "8.5s", delay: "-2s" },
+  { col: "l", px: "calc(var(--fx) - var(--fr) * 1.0)", py: "calc(var(--fy) + var(--fr) * 0.45)", pxp: "1.5rem", pyp: "calc(var(--fy) + var(--fr) * 0.3)", dur: "9s", delay: "-4s" },
+  { col: "r", px: "calc(var(--fx) + var(--fr) * 1.0)", py: "calc(var(--fy) + var(--fr) * 0.5)", pxp: "calc(100% - 1.5rem)", pyp: "calc(var(--fy) + var(--fr) * 0.3)", dur: "7.5s", delay: "-1s" },
 ] as const;
 
 /** 四句依序、各自獨立進場 */
@@ -44,8 +48,9 @@ export function EditorialLayout({ sin, prev, next, total }: Props) {
   const leaving = useRef(false);
   const [live, setLive] = useState(false);
 
-  // 沒有 WebGL 時不等場景，直接揭示
-  const ready = !webgl || signal.readySlug === sin.slug;
+  // 沒有 WebGL 或 3D 場景出錯時，不等場景，直接揭示
+  const no3d = !webgl || signal.failed;
+  const ready = no3d || signal.readySlug === sin.slug;
 
   const counter = `${String(sin.index).padStart(2, "0")} / ${String(total).padStart(2, "0")}`;
   const themeVars = {
@@ -112,6 +117,7 @@ export function EditorialLayout({ sin, prev, next, total }: Props) {
     <Link
       href={href}
       aria-label={label}
+      tabIndex={live ? 0 : -1}
       onClick={(e) => {
         e.preventDefault();
         go(href);
@@ -128,37 +134,60 @@ export function EditorialLayout({ sin, prev, next, total }: Props) {
       style={themeVars}
       className="pointer-events-none fixed inset-0 z-10 overflow-hidden"
     >
+      {/* 沒有 3D 時的替代環境光 */}
+      {no3d && (
+        <div
+          aria-hidden
+          className="absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(circle at var(--fx) var(--fy), color-mix(in srgb, var(--accent-2) 75%, transparent) 0%, transparent 60%)",
+          }}
+        />
+      )}
+
+      {/* 手機版：文字區底部漸層，確保可讀 */}
+      <div
+        data-fade
+        aria-hidden
+        className="portrait-scrim absolute inset-x-0 bottom-0 h-[58%] opacity-0"
+        style={{
+          background:
+            "linear-gradient(to top, rgba(8,7,8,0.94) 0%, rgba(8,7,8,0.78) 45%, transparent 100%)",
+        }}
+      />
+
       <header
         data-fade
         className="absolute inset-x-0 top-0 flex items-center justify-between px-6 py-6 opacity-0 sm:px-12"
       >
         {navLink("/", <><ArrowLeft size={14} aria-hidden /> HOME</>, "Return to home")}
-        <span className="font-mono text-xs tracking-[0.25em] text-ink-2">{counter}</span>
+        <div className="flex items-center gap-5">
+          <AudioController className={interactive} />
+          <span className="font-mono text-xs tracking-[0.25em] text-ink-2">{counter}</span>
+        </div>
       </header>
 
       {/* 左側：標題與簡介 */}
       <section className="edit-left absolute">
         <h1
           data-zh
-          className="font-zh text-[clamp(4.5rem,11vw,10rem)] font-light leading-none text-accent opacity-0"
+          className="edit-title font-zh font-light text-accent opacity-0"
           style={{ textShadow: "0 0 60px color-mix(in srgb, var(--accent-glow) 55%, transparent)" }}
         >
           {sin.titleZh}
         </h1>
-        <p
-          data-en
-          className="mt-5 font-display text-2xl tracking-[0.45em] opacity-0 sm:text-4xl"
-        >
+        <p data-en className="edit-en mt-5 font-display tracking-[0.45em] opacity-0">
           {sin.titleEn}
         </p>
-        <div data-line className="mt-8 h-px w-24 origin-left bg-accent opacity-80" style={{ transform: "scaleX(0)" }} />
+        <div data-line className="mt-6 h-px w-24 origin-left bg-accent opacity-80 sm:mt-8" style={{ transform: "scaleX(0)" }} />
         <p
           data-intro
-          className="mt-8 max-w-[26rem] font-zh text-base leading-loose text-ink opacity-0 sm:text-lg"
+          className="edit-intro mt-6 max-w-[26rem] font-zh leading-loose text-ink opacity-0 sm:mt-8"
         >
           {sin.introduction}
         </p>
-        <p data-sub className="mt-8 font-mono text-[11px] tracking-[0.3em] text-ink-2 opacity-0">
+        <p data-sub className="edit-sub mt-8 font-mono text-[11px] tracking-[0.3em] text-ink-2 opacity-0">
           {sin.supportingEn}
         </p>
       </section>
@@ -169,12 +198,13 @@ export function EditorialLayout({ sin, prev, next, total }: Props) {
         return (
           <div
             key={p.zh}
+            data-col={c.col}
             className="phrase-anchor absolute"
             style={
               { "--px": c.px, "--py": c.py, "--pxp": c.pxp, "--pyp": c.pyp } as React.CSSProperties
             }
           >
-            <div className={c.side === "right" ? "phrase-right" : ""}>
+            <div className="phrase-shift">
               <div data-phrase={i} className="opacity-0">
                 <div
                   className="phrase-drift"

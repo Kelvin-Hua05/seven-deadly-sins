@@ -5,6 +5,7 @@ import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 import type { Sin } from "@/types/sin";
 import type { HeadPlacement } from "@/data/headLayout";
+import { PARTICLE_STYLE } from "@/data/sinVisuals";
 import type { HeadState } from "@/lib/animation/sceneState";
 import { generateHeadCloud } from "@/lib/particles/proceduralHead";
 import { HALO_PLANE, SCAN_RANGE, SCAN_TOP } from "@/lib/sceneConfig";
@@ -62,10 +63,12 @@ export function ParticleHead({
       uScanY: { value: SCAN_TOP },
       uScanOn: { value: 0 },
       uOpacity: { value: 0 },
+      uStyle: { value: PARTICLE_STYLE[sin.slug] },
+      uStyleAmt: { value: 0 },
       uAccent: { value: new THREE.Color(sin.palette.primary) },
       uAccent2: { value: new THREE.Color(sin.palette.secondary) },
     }),
-    [sin.palette.primary, sin.palette.secondary]
+    [sin.palette.primary, sin.palette.secondary, sin.slug]
   );
 
   const haloUniforms = useMemo(
@@ -78,6 +81,7 @@ export function ParticleHead({
 
   const anchorRef = useRef<THREE.Group>(null);
   const rotRef = useRef<THREE.Group>(null);
+  const pointsRef = useRef<THREE.Points>(null);
   const haloRef = useRef<THREE.Mesh>(null);
   const matRef = useRef<THREE.ShaderMaterial>(null);
   const haloMatRef = useRef<THREE.ShaderMaterial>(null);
@@ -85,10 +89,14 @@ export function ParticleHead({
   useFrame((s) => {
     const a = anchorRef.current;
     const r = rotRef.current;
+    const pts = pointsRef.current;
     const m = matRef.current;
     const hm = haloMatRef.current;
     const halo = haloRef.current;
-    if (!a || !r || !m || !hm || !halo) return;
+    if (!a || !r || !pts || !m || !hm || !halo) return;
+
+    // 完全看不見時不繪製（角色頁的其餘六顆頭）
+    pts.visible = state.opacity * state.intro > 0.004;
 
     const t = s.clock.elapsedTime;
     const mv = state.move;
@@ -106,12 +114,12 @@ export function ParticleHead({
         (1 + 0.08 * state.reveal * (1 - mv))
     );
 
-    // 旋轉只作用在頭與身體
+    // 旋轉只作用在頭與身體；減少動態時不跟隨游標
     r.rotation.set(
-      -state.lookY * 0.12 * (1 - 0.5 * mv),
+      -state.lookY * 0.12 * (1 - 0.5 * mv) * motion,
       lerp(placement.rotY, 0, mv) +
         Math.sin(t * 0.3 + seed) * lerp(0.1, 0.03, mv) * motion +
-        state.lookX * lerp(0.35, 0.12, mv),
+        state.lookX * lerp(0.35, 0.12, mv) * motion,
       0
     );
 
@@ -126,6 +134,7 @@ export function ParticleHead({
     u.uSize.value = HEAD_SIZE * (1 + 0.4 * mv);
     u.uScanY.value = SCAN_TOP - state.build * SCAN_RANGE;
     u.uScanOn.value = state.build > 0.001 && state.build < 0.999 ? 1 : 0;
+    u.uStyleAmt.value = lerp(state.reveal * 0.7, 1, mv) * motion;
 
     hm.uniforms.uIntensity.value =
       state.reveal * 0.55 * (1 + 0.6 * mv) * state.opacity * state.intro;
@@ -149,7 +158,7 @@ export function ParticleHead({
       </mesh>
 
       <group ref={rotRef}>
-        <points frustumCulled={false}>
+        <points ref={pointsRef} frustumCulled={false}>
           <bufferGeometry>
             <bufferAttribute attach="attributes-position" args={[cloud.positions, 3]} />
             <bufferAttribute attach="attributes-aTone" args={[cloud.tones, 1]} />
@@ -173,7 +182,7 @@ export function ParticleHead({
 
       {withBody && <SymbolField sin={sin} state={state} motion={motion} />}
 
-      {/* 不可見的點擊區域 */}
+      {/* 不可見的點擊區域（略小，避免手機上相鄰的頭互相搶點擊） */}
       <mesh
         position={[0, 0.03, 0]}
         onClick={(e: ThreeEvent<MouseEvent>) => {
@@ -190,7 +199,7 @@ export function ParticleHead({
           document.body.style.cursor = "";
         }}
       >
-        <sphereGeometry args={[0.8, 16, 16]} />
+        <sphereGeometry args={[0.7, 16, 16]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
     </group>

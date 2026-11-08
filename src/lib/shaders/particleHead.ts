@@ -1,3 +1,48 @@
+/**
+ * 角色專屬粒子行為（頂點位移）。
+ * uStyle：0 柔和擺動 / 1 對稱升騰 / 2 向內吸附 / 3 旋渦吞噬 / 4 緩慢下垂 / 5 破碎爆發 / 6 重影錯位
+ * uStyleAmt：0–1，強度（hover 時部分顯現，角色頁全開，減少動態時為 0）
+ */
+const BEHAVE = /* glsl */ `
+uniform float uStyle;
+uniform float uStyleAmt;
+
+vec3 behave(vec3 p, float seed, float t) {
+  float k = uStyleAmt;
+  float ph = seed * 6.2831853;
+  if (uStyle < 0.5) {
+    p.x += sin(p.y * 3.0 + t * 0.8 + ph) * 0.012 * k;
+    p.z += cos(p.y * 2.0 + t * 0.6 + ph) * 0.008 * k;
+  } else if (uStyle < 1.5) {
+    p.x += sign(p.x) * (0.004 + 0.006 * sin(t * 0.6 + ph)) * k;
+    p.y += (0.012 + 0.012 * sin(t * 0.4 + ph)) * k;
+  } else if (uStyle < 2.5) {
+    float pull = 0.5 + 0.5 * sin(t * 1.1 + ph);
+    p.xy -= p.xy * pull * 0.06 * k;
+  } else if (uStyle < 3.5) {
+    float a = sin(t * 0.7 + ph) * 0.1 * k;
+    float c = cos(a);
+    float s = sin(a);
+    p.xz = vec2(c * p.x - s * p.z, s * p.x + c * p.z);
+    p.xy *= 1.0 - 0.05 * k * (0.5 + 0.5 * sin(t + ph));
+  } else if (uStyle < 4.5) {
+    p.y -= (0.5 + 0.5 * sin(t * 0.25 + ph)) * 0.05 * k * seed;
+    p.x += sin(t * 0.2 + ph) * 0.006 * k;
+  } else if (uStyle < 5.5) {
+    float burst = pow(max(0.0, sin(t * 1.7 + seed * 3.0)), 12.0);
+    vec3 d = p + vec3(0.0001, 0.0002, 0.0003);
+    p += normalize(d) * burst * 0.14 * k * seed;
+    p.x += (fract(sin(seed * 78.233 + floor(t * 6.0)) * 43758.5) - 0.5) * 0.02 * k;
+  } else {
+    if (seed > 0.55) {
+      p.x += (0.05 + 0.02 * sin(t * 0.5 + ph)) * k;
+      p.y -= 0.01 * k;
+    }
+  }
+  return p;
+}
+`;
+
 /* ───────── 頭 ───────── */
 export const headVertex = /* glsl */ `
 uniform float uTime;
@@ -19,6 +64,8 @@ varying float vDepth;
 varying float vKind;
 varying float vScan;
 
+${BEHAVE}
+
 void main() {
   // 皮膚粒子依密度抽稀；亮線(kind>0)永遠保留
   if (aKind < 0.5 && aSeed > uDensity) {
@@ -39,6 +86,8 @@ void main() {
 
   float band = smoothstep(0.985, 1.0, sin(p.y * 4.0 - uTime * 0.8));
   p.x += band * 0.03 * uMotion;
+
+  p = behave(p, aSeed, uTime);
 
   vec3 dir = normalize(position + vec3(0.0001, 0.0002, 0.0003));
   p += dir * uDissolve * (0.6 + aSeed) * 1.4;
@@ -116,6 +165,8 @@ varying float vFresh;
 varying float vArrive;
 varying float vVis;
 
+${BEHAVE}
+
 void main() {
   // 掃描線以下尚未生成；線以上的粒子由散落位置匯聚到定位
   float a = clamp((position.y - uScanY) / 0.55, 0.0, 1.0);
@@ -128,6 +179,8 @@ void main() {
   p += vec3(sin(t * 1.3 + aSeed * 10.0), cos(t * 1.1 + aSeed * 7.0), sin(t * 0.9 + aSeed * 13.0)) * 0.004 * uMotion;
   float band = smoothstep(0.985, 1.0, sin(p.y * 4.0 - uTime * 0.8));
   p.x += band * 0.02 * uMotion;
+
+  p = behave(p, aSeed, uTime);
 
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
   gl_Position = projectionMatrix * mv;

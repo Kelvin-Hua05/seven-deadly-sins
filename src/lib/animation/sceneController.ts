@@ -1,5 +1,7 @@
 import gsap from "gsap";
 import { SINS } from "@/data/sins";
+import type { CueName } from "@/data/audio";
+import { audio } from "@/lib/audio/audioEngine";
 import { sceneSignal } from "./sceneSignal";
 import type { HeadState, SceneFlow } from "./sceneState";
 
@@ -29,6 +31,12 @@ export class SceneController {
 
   private d(s: number) {
     return this.reduced ? 0.01 : s;
+  }
+
+  /** 提示音：減少動態模式下只保留 reveal，避免多個音疊在同一瞬間 */
+  private cueAt(tl: gsap.core.Timeline, name: CueName, at: number) {
+    if (this.reduced && name !== "reveal") return;
+    tl.call(() => audio.cue(name), [], this.d(at));
   }
 
   private kill() {
@@ -69,6 +77,7 @@ export class SceneController {
 
   private ready(i: number) {
     sceneSignal.set({ readySlug: SINS[i].slug });
+    audio.cue("reveal");
   }
 
   /** 第一次載入（可能直接開在 /sins/xxx） */
@@ -107,6 +116,7 @@ export class SceneController {
 
     tl.to(sel, { intro: 1, duration: this.d(1.4), ease: "power2.out" }, 0);
     tl.to(sel, { build: 1, duration: this.d(3.0), ease: "none" }, this.d(0.8));
+    this.cueAt(tl, "scan", 0.8);
     tl.call(() => this.ready(target), [], this.d(2.3));
     tl.call(() => { f.mode = "sin"; }, [], this.d(3.9));
   }
@@ -122,6 +132,7 @@ export class SceneController {
     const tl = gsap.timeline();
     this.tl = tl;
 
+    this.cueAt(tl, "enter", 0);
     s.forEach((st, k) => {
       if (k === i) return;
       st.build = 0;
@@ -130,6 +141,7 @@ export class SceneController {
     });
     tl.to(sel, { move: 1, reveal: 1, duration: this.d(1.8), ease: "power3.inOut" }, 0);
     tl.to(sel, { build: 1, duration: this.d(3.0), ease: "none" }, this.d(1.1));
+    this.cueAt(tl, "scan", 1.1);
     tl.call(() => this.ready(i), [], this.d(2.6));
     tl.call(() => { f.mode = "sin"; }, [], this.d(4.2));
   }
@@ -143,6 +155,7 @@ export class SceneController {
     const tl = gsap.timeline();
     this.tl = tl;
 
+    this.cueAt(tl, "leave", 0);
     s.forEach((st, k) => {
       if (k === from) return;
       st.move = 0;
@@ -170,6 +183,7 @@ export class SceneController {
     const tl = gsap.timeline();
     this.tl = tl;
 
+    this.cueAt(tl, "leave", 0);
     s.forEach((st, k) => {
       if (k !== a && k !== b) st.build = 0;
     });
@@ -191,6 +205,7 @@ export class SceneController {
     tl.to(B, { dissolve: 0, duration: this.d(1.2), ease: "power2.out" }, this.d(1.3));
     tl.to(B, { opacity: 1, duration: this.d(1.0), ease: "power1.out" }, this.d(1.3));
     tl.to(B, { build: 1, duration: this.d(3.0), ease: "none" }, this.d(2.1));
+    this.cueAt(tl, "scan", 2.1);
     tl.call(() => this.ready(b), [], this.d(3.6));
     tl.call(() => { f.mode = "sin"; }, [], this.d(5.2));
   }

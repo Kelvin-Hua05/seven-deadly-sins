@@ -43,3 +43,14 @@ export const SYMBOL_SHAPE: Record<SinSlug, number> = {
   wrath: 2,
   envy: 1,
 };
+
+/** 粒子行為：0 柔和擺動 / 1 對稱升騰 / 2 向內吸附 / 3 旋渦吞噬 / 4 緩慢下垂 / 5 破碎爆發 / 6 重影錯位 */
+export const PARTICLE_STYLE: Record<SinSlug, number> = {
+  lust: 0,
+  pride: 1,
+  greed: 2,
+  gluttony: 3,
+  sloth: 4,
+  wrath: 5,
+  envy: 6,
+};

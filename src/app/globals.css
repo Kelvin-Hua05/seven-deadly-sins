@@ -87,7 +87,7 @@ body::after {
   }
 }
 
-/* ───────── Phase 3 ───────── */
+/* ───────── Phase 3 / 5 ───────── */
 :root {
   /* 角色主體光圈中心與半徑；場景載入後會被覆寫 */
   --fx: 70vw;
@@ -117,34 +117,33 @@ body::after {
   opacity: 0.8;
 }
 
-/* 編輯式排版 */
+/* ── 編輯式排版（橫向預設）── */
 .edit-left {
   left: 6vw;
   top: 20%;
   width: min(26rem, 38vw);
 }
+.edit-title {
+  font-size: clamp(4.5rem, 11vw, 10rem);
+  line-height: 1;
+}
+.edit-en {
+  font-size: clamp(1.5rem, 2.4vw, 2.25rem);
+}
+.edit-intro {
+  font-size: clamp(1rem, 1.3vw, 1.125rem);
+}
+.portrait-scrim {
+  display: none;
+}
+
 .phrase-anchor {
   left: var(--px);
   top: var(--py);
 }
-@media (orientation: landscape) {
-  .phrase-right {
-    transform: translateX(-100%);
-    text-align: right;
-  }
-}
-@media (orientation: portrait) {
-  .edit-left {
-    left: 1.5rem;
-    right: 1.5rem;
-    top: auto;
-    bottom: 4.5rem;
-    width: auto;
-  }
-  .phrase-anchor {
-    left: var(--pxp);
-    top: var(--pyp);
-  }
+.phrase-anchor[data-col="l"] .phrase-shift {
+  transform: translateX(-100%);
+  text-align: right;
 }
 
 .phrase-drift {
@@ -153,4 +152,64 @@ body::after {
 @keyframes drift {
   0%, 100% { transform: translate3d(0, 0, 0); }
   50% { transform: translate3d(0, -6px, 0); }
+}
+
+/* ── 直向（與 JS 的 portrait 判斷一致：寬高比 < 0.85）── */
+@media (max-aspect-ratio: 17/20) {
+  .edit-left {
+    left: 1.5rem;
+    right: 1.5rem;
+    top: auto;
+    bottom: 4.5rem;
+    width: auto;
+  }
+  .edit-title {
+    font-size: clamp(3rem, 15vw, 4.5rem);
+  }
+  .edit-en {
+    font-size: 1.1rem;
+  }
+  .edit-intro {
+    font-size: 0.9rem;
+    line-height: 1.9;
+  }
+  .edit-sub {
+    display: none;
+  }
+  .portrait-scrim {
+    display: block;
+  }
+  .phrase-anchor {
+    left: var(--pxp);
+    top: var(--pyp);
+  }
+  .phrase-anchor[data-col="l"] .phrase-shift {
+    transform: none;
+    text-align: left;
+  }
+  .phrase-anchor[data-col="r"] .phrase-shift {
+    transform: translateX(-100%);
+    text-align: right;
+  }
+}
+
+/* ── 橫放的手機（高度很矮）── */
+@media (max-height: 520px) and (min-aspect-ratio: 17/20) {
+  .edit-left {
+    top: 12%;
+  }
+  .edit-title {
+    font-size: 3.2rem;
+  }
+  .edit-en {
+    font-size: 1rem;
+  }
+  .edit-intro {
+    font-size: 0.8rem;
+    line-height: 1.7;
+    max-width: 22rem;
+  }
+  .edit-sub {
+    display: none;
+  }
 }

@@ -7,8 +7,10 @@ import { SINS } from "@/data/sins";
 import { useDeviceCapability } from "@/hooks/useDeviceCapability";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { useSceneSignal } from "@/hooks/useSceneSignal";
+import { audio } from "@/lib/audio/audioEngine";
 import { isWebGLAvailable } from "@/lib/webgl";
 import { LoadingIndicator } from "@/components/ui/LoadingIndicator";
+import { SceneErrorBoundary } from "./SceneErrorBoundary";
 
 const MainScene = dynamic(() => import("./MainScene"), {
   ssr: false,
@@ -29,6 +31,7 @@ export function PersistentScene() {
   const slug = pathname.startsWith("/sins/") ? (pathname.split("/")[2] ?? "") : "";
   const slugIndex = SINS.findIndex((s) => s.slug === slug);
   const sin = slugIndex >= 0 ? SINS[slugIndex] : null;
+  const sinSlug = sin?.slug ?? null;
 
   // 把目前角色的色彩寫入全站 CSS 變數
   useEffect(() => {
@@ -43,6 +46,11 @@ export function PersistentScene() {
       r.removeProperty("--accent-glow");
     };
   }, [sin]);
+
+  // 環境音跟著場景切換（音效未開啟時不會有任何動作）
+  useEffect(() => {
+    audio.setScene(sinSlug);
+  }, [sinSlug]);
 
   // 點擊後稍等一下再換網址，讓頭先開始移動
   const onEnter = useCallback(
@@ -61,12 +69,14 @@ export function PersistentScene() {
 
   return (
     <div aria-hidden className="fixed inset-0 z-0">
-      <MainScene
-        slugIndex={slugIndex}
-        cap={cap}
-        reducedMotion={reduced}
-        onEnter={onEnter}
-      />
+      <SceneErrorBoundary>
+        <MainScene
+          slugIndex={slugIndex}
+          cap={cap}
+          reducedMotion={reduced}
+          onEnter={onEnter}
+        />
+      </SceneErrorBoundary>
       <div
         className="pointer-events-none absolute inset-0"
         style={{

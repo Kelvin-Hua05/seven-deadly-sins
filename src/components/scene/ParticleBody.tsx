@@ -5,7 +5,7 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { Sin } from "@/types/sin";
 import type { HeadState } from "@/lib/animation/sceneState";
-import { BODY_STYLES } from "@/data/sinVisuals";
+import { BODY_STYLES, PARTICLE_STYLE } from "@/data/sinVisuals";
 import { generateBodyCloud } from "@/lib/particles/proceduralBody";
 import { SCAN_RANGE, SCAN_TOP } from "@/lib/sceneConfig";
 import {
@@ -39,10 +39,12 @@ export function ParticleBody({ sin, state, count, motion }: Props) {
       uScanY: { value: SCAN_TOP },
       uScanOn: { value: 0 },
       uOpacity: { value: 0 },
+      uStyle: { value: PARTICLE_STYLE[sin.slug] },
+      uStyleAmt: { value: 0 },
       uAccent: { value: new THREE.Color(sin.palette.primary) },
       uAccent2: { value: new THREE.Color(sin.palette.secondary) },
     }),
-    [sin.palette.primary, sin.palette.secondary]
+    [sin.palette.primary, sin.palette.secondary, sin.slug]
   );
 
   const scanUniforms = useMemo(
@@ -73,6 +75,7 @@ export function ParticleBody({ sin, state, count, motion }: Props) {
     u.uScanY.value = scanY;
     u.uScanOn.value = on;
     u.uOpacity.value = state.opacity * state.intro;
+    u.uStyleAmt.value = state.move * motion;
 
     scan.visible = on === 1;
     scan.position.set(0, scanY + 0.45, 0.12);
