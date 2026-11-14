@@ -1,3 +1,5 @@
+import { MELODY, noteFreq } from "@/data/melody";
+
 import {
   AUDIO_FILES,
   HOME_VOICE,
@@ -11,6 +13,7 @@ import type { SinSlug } from "@/types/sin";
 const MASTER_LEVEL = 0.8;
 const SYNTH_LEVEL = 0.22;
 const FILE_LEVEL = 0.7;
+const MELODY_LEVEL = 0.5;
 
 const MAX_OSC = 4;
 const DETUNE = [0, 7, -6, 4];
@@ -19,6 +22,7 @@ interface Graph {
   ctx: AudioContext;
   master: GainNode;
   synth: GainNode;
+  melody: GainNode;
   oscs: OscillatorNode[];
   oscGains: GainNode[];
   filter: BiquadFilterNode;
@@ -56,6 +60,9 @@ class AudioEngine {
   private buffers = new Map<string, Promise<AudioBuffer | null>>();
   private suspendTimer: ReturnType<typeof setTimeout> | null = null;
   private listeners = new Set<() => void>();
+  private melodyTimer: ReturnType<typeof setInterval> | null = null;
+  private melodyStep = 0;
+  private melodyNext = 0;
 
   /* ── React 外部 store ── */
   subscribe = (cb: () => void) => {
@@ -80,6 +87,23 @@ class AudioEngine {
       const master = ctx.createGain();
       master.gain.value = 0;
       master.connect(ctx.destination);
+
+      // 旋律音軌：帶一點回音，營造空間感
+      const melody = ctx.createGain();
+      melody.gain.value = MELODY_LEVEL;
+      melody.connect(master);
+      const echo = ctx.createDelay(1.5);
+      echo.delayTime.value = 0.75;
+      const echoLp = ctx.createBiquadFilter();
+      echoLp.type = "lowpass";
+      echoLp.frequency.value = 2200;
+      const echoFb = ctx.createGain();
+      echoFb.gain.value = 0.38;
+      melody.connect(echo);
+      echo.connect(echoLp);
+      echoLp.connect(echoFb);
+      echoFb.connect(echo);
+      echoLp.connect(master);
 
       const synth = ctx.createGain();
       synth.gain.value = SYNTH_LEVEL;
@@ -139,6 +163,7 @@ class AudioEngine {
         ctx,
         master,
         synth,
+        melody,
         oscs,
         oscGains,
         filter,
@@ -163,6 +188,7 @@ class AudioEngine {
     void g.ctx.resume();
     g.master.gain.setTargetAtTime(MASTER_LEVEL, g.ctx.currentTime, 0.4);
     this.applyScene(first ? 0.01 : 1.2);
+    this.startMelody();
     this.emit();
   }
 
@@ -170,6 +196,7 @@ class AudioEngine {
     const g = this.g;
     if (!g) return;
     this.on = false;
+    this.stopMelody();
     g.master.gain.setTargetAtTime(0, g.ctx.currentTime, 0.25);
     this.suspendTimer = setTimeout(() => {
       if (!this.on) void g.ctx.suspend();
@@ -220,6 +247,77 @@ class AudioEngine {
     this.setFileLayer(url ?? null);
   }
 
+  /* ── 背景旋律 ── */
+  private startMelody() {
+    const g = this.g;
+    if (!g || this.melodyTimer) return;
+    this.melodyStep = 0;
+    this.melodyNext = g.ctx.currentTime + 0.6;
+    this.melodyTimer = setInterval(() => this.scheduleMelody(), 100);
+  }
+
+  private stopMelody() {
+    if (this.melodyTimer) {
+      clearInterval(this.melodyTimer);
+      this.melodyTimer = null;
+    }
+  }
+
+  private scheduleMelody() {
+    const g = this.g;
+    if (!g || !this.on) return;
+    const stepDur = 60 / MELODY.bpm / 4;
+    // 分頁暫停後回來：不要一次補播落後的音
+    if (this.melodyNext < g.ctx.currentTime - 0.1) {
+      this.melodyNext = g.ctx.currentTime + 0.1;
+    }
+    while (this.melodyNext < g.ctx.currentTime + 0.4) {
+      const bar = MELODY.bars[Math.floor(this.melodyStep / 16) % MELODY.bars.length];
+      const step = this.melodyStep % 16;
+      const note = bar[step];
+      if (note) this.pluck(noteFreq(note), this.melodyNext, step % 4 === 0);
+      this.melodyStep++;
+      this.melodyNext += stepDur;
+    }
+  }
+
+  private pluck(freq: number, when: number, accent: boolean) {
+    const g = this.g;
+    if (!g || freq <= 0) return;
+    const { ctx } = g;
+    const peak = accent ? 0.16 : 0.1;
+
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0.0001, when);
+    env.gain.exponentialRampToValueAtTime(peak, when + 0.012);
+    env.gain.exponentialRampToValueAtTime(0.0001, when + 1.4);
+    env.connect(g.melody);
+
+    const a = ctx.createOscillator();
+    a.type = "triangle";
+    a.frequency.value = freq;
+    a.connect(env);
+
+    const b = ctx.createOscillator();
+    b.type = "sine";
+    b.frequency.value = freq * 2;
+    const bg = ctx.createGain();
+    bg.gain.value = 0.3;
+    b.connect(bg);
+    bg.connect(env);
+
+    a.start(when);
+    b.start(when);
+    a.stop(when + 1.5);
+    b.stop(when + 1.5);
+    a.onended = () => {
+      a.disconnect();
+      b.disconnect();
+      bg.disconnect();
+      env.disconnect();
+    };
+  }
+    
   private setFileLayer(url: string | null) {
     const g = this.g;
     if (!g) return;

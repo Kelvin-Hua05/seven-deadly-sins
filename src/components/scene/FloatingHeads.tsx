@@ -10,6 +10,8 @@ import { HeadState, SceneFlow } from "@/lib/animation/sceneState";
 import { SceneController } from "@/lib/animation/sceneController";
 import { computeSinLayout, FOV } from "@/lib/sceneConfig";
 import { ParticleHead } from "./ParticleHead";
+import { FIGURES } from "@/data/figures";
+import { figureCount, getFigureData } from "@/lib/particles/imageCloud";
 
 const _v = new THREE.Vector3();
 
@@ -58,6 +60,24 @@ export function FloatingHeads({ slugIndex, cap, reducedMotion, onEnter }: Props)
   useEffect(() => {
     controller.sync(slugIndex);
   }, [controller, slugIndex]);
+
+  // 閒置時先把插圖角色的粒子備妥
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      SINS.forEach((sin, i) => {
+        const spec = FIGURES[sin.slug];
+        if (spec) {
+          void getFigureData(
+            sin.slug,
+            spec,
+            figureCount(Math.round(cap.particleCount * 1.4)),
+            i + 1
+          );
+        }
+      });
+    }, 2500);
+    return () => window.clearTimeout(id);
+  }, [cap.particleCount]);
 
   useEffect(
     () => () => {

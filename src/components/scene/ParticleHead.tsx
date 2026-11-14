@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useRef } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 import type { Sin } from "@/types/sin";
 import type { HeadPlacement } from "@/data/headLayout";
+import { FIGURES } from "@/data/figures";
 import { PARTICLE_STYLE } from "@/data/sinVisuals";
 import type { HeadState } from "@/lib/animation/sceneState";
 import { generateHeadCloud } from "@/lib/particles/proceduralHead";
@@ -15,6 +16,7 @@ import {
   headFragment,
   headVertex,
 } from "@/lib/shaders/particleHead";
+import { ImageFigure } from "./ImageFigure";
 import { ParticleBody } from "./ParticleBody";
 import { SymbolField } from "./SymbolField";
 
@@ -50,6 +52,13 @@ export function ParticleHead({
 }: Props) {
   const seed = index + 1;
   const cloud = useMemo(() => generateHeadCloud(count, seed), [count, seed]);
+  const hasFigure = Boolean(FIGURES[sin.slug]);
+
+  // 插圖準備好之後，程序化頭才淡出交棒給插圖
+  const figReady = useRef(false);
+  const onFigureReady = useCallback((ready: boolean) => {
+    figReady.current = ready;
+  }, []);
 
   const uniforms = useMemo(
     () => ({
@@ -95,8 +104,12 @@ export function ParticleHead({
     const halo = haloRef.current;
     if (!a || !r || !pts || !m || !hm || !halo) return;
 
-    // 完全看不見時不繪製（角色頁的其餘六顆頭）
-    pts.visible = state.opacity * state.intro > 0.004;
+    // 插圖接手後，程序化頭與光圈淡出
+    const figFade = figReady.current
+      ? THREE.MathUtils.smoothstep(state.build, 0, 0.04)
+      : 0;
+    const headVis = state.opacity * state.intro * (1 - figFade);
+    pts.visible = headVis > 0.004;
 
     const t = s.clock.elapsedTime;
     const mv = state.move;
@@ -129,7 +142,7 @@ export function ParticleHead({
     u.uReveal.value = state.reveal;
     u.uMotion.value = motion;
     u.uDissolve.value = state.dissolve;
-    u.uOpacity.value = state.opacity * state.intro;
+    u.uOpacity.value = headVis;
     u.uDensity.value = lerp(homeDensity, 1, mv);
     u.uSize.value = HEAD_SIZE * (1 + 0.4 * mv);
     u.uScanY.value = SCAN_TOP - state.build * SCAN_RANGE;
@@ -137,7 +150,7 @@ export function ParticleHead({
     u.uStyleAmt.value = lerp(state.reveal * 0.7, 1, mv) * motion;
 
     hm.uniforms.uIntensity.value =
-      state.reveal * 0.55 * (1 + 0.6 * mv) * state.opacity * state.intro;
+      state.reveal * 0.55 * (1 + 0.6 * mv) * state.opacity * state.intro * (1 - figFade);
     halo.visible = state.reveal > 0.01;
   });
 
@@ -175,9 +188,19 @@ export function ParticleHead({
             blending={THREE.AdditiveBlending}
           />
         </points>
-        {withBody && (
-          <ParticleBody sin={sin} state={state} count={bodyCount} motion={motion} />
-        )}
+        {withBody &&
+          (hasFigure ? (
+            <ImageFigure
+              sin={sin}
+              index={index}
+              state={state}
+              bodyCount={bodyCount}
+              motion={motion}
+              onReady={onFigureReady}
+            />
+          ) : (
+            <ParticleBody sin={sin} state={state} count={bodyCount} motion={motion} />
+          ))}
       </group>
 
       {withBody && <SymbolField sin={sin} state={state} motion={motion} />}

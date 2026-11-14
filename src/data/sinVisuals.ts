@@ -54,3 +54,20 @@ export const PARTICLE_STYLE: Record<SinSlug, number> = {
   wrath: 5,
   envy: 6,
 };
+
+/** 每個角色的重建時間（秒）。ready = 從重建開始算起，文字開始揭示的時間點 */
+export interface TransitionSpec {
+  build: number;
+  ready: number;
+}
+const DEFAULT_TRANSITION: TransitionSpec = { build: 3.0, ready: 1.5 };
+
+export const TRANSITIONS: Record<SinSlug, TransitionSpec> = {
+  lust: { build: 6.5, ready: 4.2 },
+  pride: DEFAULT_TRANSITION,
+  greed: DEFAULT_TRANSITION,
+  gluttony: DEFAULT_TRANSITION,
+  sloth: DEFAULT_TRANSITION,
+  wrath: DEFAULT_TRANSITION,
+  envy: DEFAULT_TRANSITION,
+};

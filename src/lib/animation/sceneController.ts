@@ -1,5 +1,6 @@
 import gsap from "gsap";
 import { SINS } from "@/data/sins";
+import { TRANSITIONS } from "@/data/sinVisuals";
 import type { CueName } from "@/data/audio";
 import { audio } from "@/lib/audio/audioEngine";
 import { sceneSignal } from "./sceneSignal";
@@ -10,6 +11,7 @@ const UNSET = -2;
 /**
  * 場景時間軸：依目前路由對應的角色索引（-1 = 首頁）切換狀態。
  * sync() 可重複呼叫（冪等），點擊與路由變更都會呼叫它。
+ * 各角色的重建時長在 data/sinVisuals.ts 的 TRANSITIONS。
  */
 export class SceneController {
   private states: HeadState[];
@@ -31,6 +33,10 @@ export class SceneController {
 
   private d(s: number) {
     return this.reduced ? 0.01 : s;
+  }
+
+  private spec(i: number) {
+    return TRANSITIONS[SINS[i].slug];
   }
 
   /** 提示音：減少動態模式下只保留 reveal，避免多個音疊在同一瞬間 */
@@ -114,11 +120,13 @@ export class SceneController {
     sel.reveal = 1;
     this.onBodyIndex(target);
 
+    const sp = this.spec(target);
+    const t0 = 0.8;
     tl.to(sel, { intro: 1, duration: this.d(1.4), ease: "power2.out" }, 0);
-    tl.to(sel, { build: 1, duration: this.d(3.0), ease: "none" }, this.d(0.8));
-    this.cueAt(tl, "scan", 0.8);
-    tl.call(() => this.ready(target), [], this.d(2.3));
-    tl.call(() => { f.mode = "sin"; }, [], this.d(3.9));
+    tl.to(sel, { build: 1, duration: this.d(sp.build), ease: "none" }, this.d(t0));
+    this.cueAt(tl, "scan", t0);
+    tl.call(() => this.ready(target), [], this.d(t0 + sp.ready));
+    tl.call(() => { f.mode = "sin"; }, [], this.d(t0 + sp.build + 0.1));
   }
 
   /** A→B→C→D：點擊後右移、其餘溶解、重建身體、揭示文字 */
@@ -132,6 +140,8 @@ export class SceneController {
     const tl = gsap.timeline();
     this.tl = tl;
 
+    const sp = this.spec(i);
+    const t0 = 1.1;
     this.cueAt(tl, "enter", 0);
     s.forEach((st, k) => {
       if (k === i) return;
@@ -140,10 +150,10 @@ export class SceneController {
       tl.to(st, { opacity: 0, duration: this.d(1.0), ease: "power1.in" }, 0);
     });
     tl.to(sel, { move: 1, reveal: 1, duration: this.d(1.8), ease: "power3.inOut" }, 0);
-    tl.to(sel, { build: 1, duration: this.d(3.0), ease: "none" }, this.d(1.1));
-    this.cueAt(tl, "scan", 1.1);
-    tl.call(() => this.ready(i), [], this.d(2.6));
-    tl.call(() => { f.mode = "sin"; }, [], this.d(4.2));
+    tl.to(sel, { build: 1, duration: this.d(sp.build), ease: "none" }, this.d(t0));
+    this.cueAt(tl, "scan", t0);
+    tl.call(() => this.ready(i), [], this.d(t0 + sp.ready));
+    tl.call(() => { f.mode = "sin"; }, [], this.d(t0 + sp.build + 0.1));
   }
 
   private sinToHome(from: number) {
@@ -183,6 +193,8 @@ export class SceneController {
     const tl = gsap.timeline();
     this.tl = tl;
 
+    const sp = this.spec(b);
+    const t0 = 2.1;
     this.cueAt(tl, "leave", 0);
     s.forEach((st, k) => {
       if (k !== a && k !== b) st.build = 0;
@@ -204,9 +216,9 @@ export class SceneController {
     }, [], this.d(1.3));
     tl.to(B, { dissolve: 0, duration: this.d(1.2), ease: "power2.out" }, this.d(1.3));
     tl.to(B, { opacity: 1, duration: this.d(1.0), ease: "power1.out" }, this.d(1.3));
-    tl.to(B, { build: 1, duration: this.d(3.0), ease: "none" }, this.d(2.1));
-    this.cueAt(tl, "scan", 2.1);
-    tl.call(() => this.ready(b), [], this.d(3.6));
-    tl.call(() => { f.mode = "sin"; }, [], this.d(5.2));
+    tl.to(B, { build: 1, duration: this.d(sp.build), ease: "none" }, this.d(t0));
+    this.cueAt(tl, "scan", t0);
+    tl.call(() => this.ready(b), [], this.d(t0 + sp.ready));
+    tl.call(() => { f.mode = "sin"; }, [], this.d(t0 + sp.build + 0.1));
   }
 }
