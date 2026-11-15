@@ -1,22 +1,25 @@
 import type { FigureSpec } from "@/data/figures";
 import type { SinSlug } from "@/types/sin";
-import { generateHeadCloud } from "./proceduralHead";
 import { createRng } from "./random";
 
-/** 一組「頭 → 特寫 → 全身」的粒子資料。三組粒子依「由上到下、由左到右」配對 */
+/**
+ * 一組「首頁頭像 → 臉部特寫 → 全身」的粒子資料。
+ * 頭像與特寫取自同一張圖的同一批取樣點（只是縮放不同），所以第一階段是原地「向外綻開」。
+ * 特寫與全身之間依「由上到下、由左到右」配對。
+ */
 export interface FigureData {
   count: number;
-  /** 起點：程序化頭 */
+  /** 首頁頭像位置（= 特寫的縮小版） */
   p0: Float32Array;
-  tone0: Float32Array;
-  kind0: Float32Array;
-  seed: Float32Array;
-  /** 特寫圖 */
+  /** 首頁可見權重（0–1）：橢圓內為 1，往外淡出 */
+  home: Float32Array;
+  /** 特寫位置與顏色（頭像階段共用同一個顏色） */
   p1: Float32Array;
   c1: Float32Array;
-  /** 全身圖 */
+  /** 全身位置與顏色 */
   p2: Float32Array;
   c2: Float32Array;
+  seed: Float32Array;
   /** 每顆粒子兩個階段的延遲（0–1） */
   delay: Float32Array;
   body: { width: number; height: number; top: number };
@@ -63,46 +66,78 @@ async function loadPixels(url: string, maxSide = 900): Promise<Pixels> {
   return { data: ctx.getImageData(0, 0, w, h).data, w, h };
 }
 
-/** 依亮度做重要性取樣：越亮的地方粒子越多，顏色取自原圖 */
-function sampleImage(
-  px: Pixels,
-  count: number,
-  seed: number,
-  worldH: number,
-  cy: number
-) {
+/**
+ * 邊界淡出：圓角矩形形狀的衰減，中心為 1，越靠近圖片邊緣越接近 0，
+ * 四個角完全為 0，所以看不出矩形的邊界。start 越小，淡出範圍越大。
+ */
+function edgeMask(u: number, v: number, start: number): number {
+  const a = Math.abs(2 * u - 1);
+  const b = Math.abs(2 * v - 1);
+  const d = Math.pow(a * a * a * a + b * b * b * b, 0.25);
+  return 1 - smooth(start, 1, d);
+}
+
+interface Sampled {
+  u: Float32Array;
+  v: Float32Array;
+  lum: Float32Array;
+  jz: Float32Array;
+  col: Float32Array;
+  aspect: number;
+}
+
+/** 依亮度與邊界遮罩做重要性取樣：越亮、越靠近中央，粒子越多；顏色取自原圖 */
+function sampleImage(px: Pixels, count: number, seed: number, edgeStart: number): Sampled {
   const { data, w, h } = px;
   const rng = createRng(seed);
-  const aspect = w / h;
-  const pos = new Float32Array(count * 3);
+  const u = new Float32Array(count);
+  const v = new Float32Array(count);
+  const lum = new Float32Array(count);
+  const jz = new Float32Array(count);
   const col = new Float32Array(count * 3);
-  const maxGuard = count * 120;
+  const maxGuard = count * 160;
   let n = 0;
   let guard = 0;
 
   while (n < count) {
     const ix = (rng() * w) | 0;
     const iy = (rng() * h) | 0;
+    const fu = (ix + 0.5) / w;
+    const fv = (iy + 0.5) / h;
     const o = (iy * w + ix) * 4;
     const r = data[o] / 255;
     const g = data[o + 1] / 255;
     const b = data[o + 2] / 255;
     const L = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-    const accept = FLOOR + (1 - FLOOR) * Math.pow(smooth(LO, HI, L), GAMMA);
+    const m = edgeMask(fu, fv, edgeStart);
+    const accept = (FLOOR + (1 - FLOOR) * Math.pow(smooth(LO, HI, L), GAMMA)) * m;
     guard++;
-    // 全黑的圖永遠抽不滿：超過上限就直接收下
+    // 異常的圖（幾乎全黑）永遠抽不滿：超過上限就直接收下
     if (guard < maxGuard && rng() > accept) continue;
 
-    const i = n * 3;
-    pos[i] = ((ix + rng()) / w - 0.5) * aspect * worldH;
-    pos[i + 1] = (0.5 - (iy + rng()) / h) * worldH + cy;
-    pos[i + 2] = (L - 0.35) * 0.25 + (rng() - 0.5) * 0.05;
-    col[i] = Math.min(1, Math.pow(r, COLOR_GAMMA) * COLOR_GAIN);
-    col[i + 1] = Math.min(1, Math.pow(g, COLOR_GAMMA) * COLOR_GAIN);
-    col[i + 2] = Math.min(1, Math.pow(b, COLOR_GAMMA) * COLOR_GAIN);
+    u[n] = (ix + rng()) / w;
+    v[n] = (iy + rng()) / h;
+    lum[n] = L;
+    jz[n] = (rng() - 0.5) * 0.05;
+    // 越靠近邊緣顏色也越暗，雙重淡出
+    const dim = Math.sqrt(Math.max(m, 0.05));
+    col[n * 3] = Math.min(1, Math.pow(r, COLOR_GAMMA) * COLOR_GAIN) * dim;
+    col[n * 3 + 1] = Math.min(1, Math.pow(g, COLOR_GAMMA) * COLOR_GAIN) * dim;
+    col[n * 3 + 2] = Math.min(1, Math.pow(b, COLOR_GAMMA) * COLOR_GAIN) * dim;
     n++;
   }
-  return { pos, col, aspect };
+  return { u, v, lum, jz, col, aspect: w / h };
+}
+
+function project(s: Sampled, worldH: number, cy: number, cx = 0): Float32Array {
+  const n = s.u.length;
+  const out = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    out[i * 3] = (s.u[i] - 0.5) * s.aspect * worldH + cx;
+    out[i * 3 + 1] = (0.5 - s.v[i]) * worldH + cy;
+    out[i * 3 + 2] = (s.lum[i] - 0.35) * 0.25 + s.jz[i];
+  }
+  return out;
 }
 
 /** 由上到下排序，再把每一條水平帶由左到右排序，讓不同雲之間的配對有空間連貫性 */
@@ -139,52 +174,81 @@ async function buildFigureData(
     loadPixels(spec.bodyUrl),
   ]);
 
-  const head = generateHeadCloud(count, headSeed);
-  const s1 = sampleImage(hp, count, 101 + headSeed, spec.headHeight, spec.headCY);
-  const s2 = sampleImage(bp, count, 202 + headSeed, spec.bodyHeight, spec.bodyCY);
+  const head = sampleImage(hp, count, 101 + headSeed, spec.headEdge);
+  const body = sampleImage(bp, count, 202 + headSeed, spec.bodyEdge);
 
-  const o0 = order(head.positions, count);
-  const o1 = order(s1.pos, count);
-  const o2 = order(s2.pos, count);
+  // 首頁頭像：同一批取樣點縮放後，讓橢圓中心落在頭部局部座標的 (0, 0.03)
+  const [cu, cv] = spec.homeCenter;
+  const [rh, rv] = spec.homeRadius;
+  const cx0 = -(cu - 0.5) * head.aspect * spec.homeHeight;
+  const cy0 = 0.03 - (0.5 - cv) * spec.homeHeight;
+  const p0raw = project(head, spec.homeHeight, cy0, cx0);
+  const p1raw = project(head, spec.headHeight, spec.headCY);
+  const p2raw = project(body, spec.bodyHeight, spec.bodyCY);
 
-  const p0 = permute(head.positions, o0, 3);
-  const tone0 = permute(head.tones, o0, 1);
-  const kind0 = permute(head.kinds, o0, 1);
-  const p1 = permute(s1.pos, o1, 3);
-  const c1 = permute(s1.col, o1, 3);
-  const p2 = permute(s2.pos, o2, 3);
-  const c2 = permute(s2.col, o2, 3);
+  const homeRaw = new Float32Array(count);
+  for (let i = 0; i < count; i++) {
+    const dx = ((head.u[i] - cu) * head.aspect) / rh;
+    const dy = (head.v[i] - cv) / rv;
+    homeRaw[i] = 1 - smooth(0.5, 1, Math.hypot(dx, dy));
+  }
+
+  const o1 = order(p1raw, count);
+  const o2 = order(p2raw, count);
+
+  const p0 = permute(p0raw, o1, 3);
+  const p1 = permute(p1raw, o1, 3);
+  const home = permute(homeRaw, o1, 1);
+  const c1 = permute(head.col, o1, 3);
+  const p2 = permute(p2raw, o2, 3);
+  const c2 = permute(body.col, o2, 3);
 
   const rng = createRng(7 + headSeed);
   const seed = new Float32Array(count);
   const delay = new Float32Array(count * 2);
   const top = spec.bodyCY + spec.bodyHeight / 2;
+  const faceX = (cu - 0.5) * head.aspect * spec.headHeight;
+  const faceY = (0.5 - cv) * spec.headHeight + spec.headCY;
   const faceR = spec.headHeight * 0.6;
+
+  // 昇華版（傲慢）：特寫由中軸線向左右對稱展開；全身由腳下往上撐起
+  const ascend = spec.variant === "ascend";
+  const bottom = spec.bodyCY - spec.bodyHeight / 2;
+  const headTop = spec.headCY + spec.headHeight / 2;
+  const halfW = (head.aspect * spec.headHeight) / 2;
 
   for (let i = 0; i < count; i++) {
     const sd = rng();
     seed[i] = sd;
-    // 第一階段：從臉中心向外綻開
-    const dx = p1[i * 3];
-    const dy = p1[i * 3 + 1] - spec.headCY;
-    delay[i * 2] = clamp(Math.hypot(dx, dy) / faceR) * 0.8 + sd * 0.2;
-    // 第二階段：由頭頂往腳下掃描
-    delay[i * 2 + 1] =
-      clamp((top - p2[i * 3 + 1]) / spec.bodyHeight) * 0.88 + sd * 0.12;
+    const dx = p1[i * 3] - faceX;
+    const dy = p1[i * 3 + 1] - faceY;
+    if (ascend) {
+      delay[i * 2] =
+        clamp(Math.abs(dx) / halfW) * 0.75 +
+        clamp((headTop - p1[i * 3 + 1]) / spec.headHeight) * 0.15 +
+        sd * 0.1;
+      delay[i * 2 + 1] =
+        clamp((p2[i * 3 + 1] - bottom) / spec.bodyHeight) * 0.88 + sd * 0.12;
+    } else {
+      // 第一階段：從臉中心向外綻開
+      delay[i * 2] = clamp(Math.hypot(dx, dy) / faceR) * 0.8 + sd * 0.2;
+      // 第二階段：由頭頂往腳下掃描
+      delay[i * 2 + 1] =
+        clamp((top - p2[i * 3 + 1]) / spec.bodyHeight) * 0.88 + sd * 0.12;
+    }
   }
 
   return {
     count,
     p0,
-    tone0,
-    kind0,
-    seed,
+    home,
     p1,
     c1,
     p2,
     c2,
+    seed,
     delay,
-    body: { width: s2.aspect * spec.bodyHeight, height: spec.bodyHeight, top },
+    body: { width: body.aspect * spec.bodyHeight, height: spec.bodyHeight, top },
   };
 }
 

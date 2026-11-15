@@ -54,7 +54,7 @@ export function ParticleHead({
   const cloud = useMemo(() => generateHeadCloud(count, seed), [count, seed]);
   const hasFigure = Boolean(FIGURES[sin.slug]);
 
-  // 插圖準備好之後，程序化頭才淡出交棒給插圖
+  // 插圖粒子準備好之後，才由插圖頭像接手（準備好之前先顯示程序化頭，避免空白）
   const figReady = useRef(false);
   const onFigureReady = useCallback((ready: boolean) => {
     figReady.current = ready;
@@ -95,7 +95,7 @@ export function ParticleHead({
   const matRef = useRef<THREE.ShaderMaterial>(null);
   const haloMatRef = useRef<THREE.ShaderMaterial>(null);
 
-  useFrame((s) => {
+  useFrame((s, dt) => {
     const a = anchorRef.current;
     const r = rotRef.current;
     const pts = pointsRef.current;
@@ -104,12 +104,16 @@ export function ParticleHead({
     const halo = haloRef.current;
     if (!a || !r || !pts || !m || !hm || !halo) return;
 
-    // 插圖接手後，程序化頭與光圈淡出
-    const figFade = figReady.current
-      ? THREE.MathUtils.smoothstep(state.build, 0, 0.04)
-      : 0;
-    const headVis = state.opacity * state.intro * (1 - figFade);
+    // state.figure：插圖頭像接手的程度（0 = 程序化頭，1 = 插圖頭像）
+    if (hasFigure) state.followFigure(figReady.current, Math.min(dt, 0.05));
+    const headVis = state.opacity * state.intro * (1 - state.figure);
     pts.visible = headVis > 0.004;
+
+    // 變形開始後，程序化的光圈淡出（插圖本身帶有光環）
+    const buildFade =
+      hasFigure && state.figure > 0.5
+        ? THREE.MathUtils.smoothstep(state.build, 0, 0.04)
+        : 0;
 
     const t = s.clock.elapsedTime;
     const mv = state.move;
@@ -127,12 +131,15 @@ export function ParticleHead({
         (1 + 0.08 * state.reveal * (1 - mv))
     );
 
-    // 旋轉只作用在頭與身體；減少動態時不跟隨游標
+    // 旋轉只作用在頭與身體；減少動態時不跟隨游標。
+    // 插圖是平面取樣，轉太多會像一張卡片在轉，所以降低幅度
+    const rk = 1 - 0.65 * state.figure;
     r.rotation.set(
-      -state.lookY * 0.12 * (1 - 0.5 * mv) * motion,
-      lerp(placement.rotY, 0, mv) +
+      -state.lookY * 0.12 * (1 - 0.5 * mv) * motion * rk,
+      (lerp(placement.rotY, 0, mv) +
         Math.sin(t * 0.3 + seed) * lerp(0.1, 0.03, mv) * motion +
-        state.lookX * lerp(0.35, 0.12, mv) * motion,
+        state.lookX * lerp(0.35, 0.12, mv) * motion) *
+        rk,
       0
     );
 
@@ -150,7 +157,7 @@ export function ParticleHead({
     u.uStyleAmt.value = lerp(state.reveal * 0.7, 1, mv) * motion;
 
     hm.uniforms.uIntensity.value =
-      state.reveal * 0.55 * (1 + 0.6 * mv) * state.opacity * state.intro * (1 - figFade);
+      state.reveal * 0.55 * (1 + 0.6 * mv) * state.opacity * state.intro * (1 - buildFade);
     halo.visible = state.reveal > 0.01;
   });
 
@@ -188,19 +195,22 @@ export function ParticleHead({
             blending={THREE.AdditiveBlending}
           />
         </points>
-        {withBody &&
-          (hasFigure ? (
-            <ImageFigure
-              sin={sin}
-              index={index}
-              state={state}
-              bodyCount={bodyCount}
-              motion={motion}
-              onReady={onFigureReady}
-            />
-          ) : (
-            <ParticleBody sin={sin} state={state} count={bodyCount} motion={motion} />
-          ))}
+
+        {/* 有插圖的角色：頭像、特寫、全身都由 ImageFigure 負責，首頁就開始顯示 */}
+        {hasFigure && (
+          <ImageFigure
+            sin={sin}
+            index={index}
+            state={state}
+            bodyCount={bodyCount}
+            homeDensity={homeDensity}
+            motion={motion}
+            onReady={onFigureReady}
+          />
+        )}
+        {withBody && !hasFigure && (
+          <ParticleBody sin={sin} state={state} count={bodyCount} motion={motion} />
+        )}
       </group>
 
       {withBody && <SymbolField sin={sin} state={state} motion={motion} />}

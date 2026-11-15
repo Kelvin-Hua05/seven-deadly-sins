@@ -11,25 +11,44 @@ import {
   getFigureData,
   type FigureData,
 } from "@/lib/particles/imageCloud";
-import { figureFragment, figureVertex } from "@/lib/shaders/figure";
+import { figureFragment, figureVertex, shockFragment } from "@/lib/shaders/figure";
 import { haloVertex, scanFragment } from "@/lib/shaders/particleHead";
 
 /** 粒子整體大小；覺得太細就調大 */
 const SIZE_SCALE = 1.0;
-const SPAN = 0.4;
+/** 與著色器的 span 一致（流動 0.4、碎裂 0.28、霧化 0.9、昇華 0.5） */
+const SPAN = { flow: 0.4, shatter: 0.28, mist: 0.9, ascend: 0.5 } as const;
+
+const bell = (x: number, c: number, w: number) => Math.exp(-(((x - c) / w) ** 2));
 
 interface Props {
   sin: Sin;
   index: number;
   state: HeadState;
   bodyCount: number;
+  homeDensity: number;
   motion: number;
   onReady: (ready: boolean) => void;
 }
 
-/** 插圖角色：程序化頭 → 臉部特寫 → 全身，由 state.build（0–1）驅動 */
-export function ImageFigure({ sin, index, state, bodyCount, motion, onReady }: Props) {
+/**
+ * 插圖角色：首頁頭像 → 臉部特寫 → 全身。
+ * 全程使用同一批粒子；首頁階段由 state.reveal 控制顯色，之後由 state.build（0–1）驅動變形。
+ * 變形的風格由 FIGURES[slug].variant 決定。
+ */
+export function ImageFigure({
+  sin,
+  index,
+  state,
+  bodyCount,
+  homeDensity,
+  motion,
+  onReady,
+}: Props) {
   const spec = FIGURES[sin.slug];
+  const shatter = spec?.variant === "shatter";
+  const mist = spec?.variant === "mist";
+  const ascend = spec?.variant === "ascend";
   const [data, setData] = useState<FigureData | null>(null);
 
   useEffect(() => {
@@ -58,10 +77,14 @@ export function ImageFigure({ sin, index, state, bodyCount, motion, onReady }: P
       uMotion: { value: 1 },
       uOpacity: { value: 0 },
       uSizeScale: { value: SIZE_SCALE },
+      uReveal: { value: 0 },
+      uDissolve: { value: 0 },
+      uDensity: { value: 0.9 },
+      uVariant: { value: shatter ? 1 : mist ? 2 : ascend ? 3 : 0 },
+      uShake: { value: new THREE.Vector3() },
       uAccent: { value: new THREE.Color(sin.palette.primary) },
-      uAccent2: { value: new THREE.Color(sin.palette.secondary) },
     }),
-    [sin.palette.primary, sin.palette.secondary]
+    [sin.palette.primary, shatter, mist, ascend]
   );
 
   const scanUniforms = useMemo(
@@ -72,9 +95,22 @@ export function ImageFigure({ sin, index, state, bodyCount, motion, onReady }: P
     [sin.palette.glow]
   );
 
+  const shockUniforms = useMemo(
+    () => ({
+      uColor: { value: new THREE.Color(sin.palette.glow) },
+      uR1: { value: 0 },
+      uA1: { value: 0 },
+      uR2: { value: 0 },
+      uA2: { value: 0 },
+    }),
+    [sin.palette.glow]
+  );
+
   const matRef = useRef<THREE.ShaderMaterial>(null);
   const scanMatRef = useRef<THREE.ShaderMaterial>(null);
   const scanRef = useRef<THREE.Mesh>(null);
+  const shockMatRef = useRef<THREE.ShaderMaterial>(null);
+  const shockRef = useRef<THREE.Mesh>(null);
 
   useFrame((s) => {
     const m = matRef.current;
@@ -85,21 +121,57 @@ export function ImageFigure({ sin, index, state, bodyCount, motion, onReady }: P
     const b = state.build;
     const m1 = THREE.MathUtils.clamp(b / 0.45, 0, 1);
     const m2 = THREE.MathUtils.clamp((b - 0.4) / 0.6, 0, 1);
+    const t = s.clock.elapsedTime;
 
     const u = m.uniforms;
-    u.uTime.value = s.clock.elapsedTime;
+    u.uTime.value = t;
     u.uPixelRatio.value = s.gl.getPixelRatio();
     u.uM1.value = m1;
     u.uM2.value = m2;
     u.uMotion.value = motion;
-    u.uOpacity.value = THREE.MathUtils.smoothstep(b, 0, 0.04) * state.opacity * state.intro;
+    u.uOpacity.value = state.opacity * state.intro * state.figure;
+    u.uReveal.value = state.reveal;
+    u.uDissolve.value = state.dissolve;
+    // 首頁階段抽稀，接近角色頁時全開
+    u.uDensity.value = THREE.MathUtils.lerp(
+      Math.min(1, homeDensity * 1.3),
+      1,
+      state.move
+    );
 
     // 掃描線跟著第二階段的前緣由頭頂往下
-    const on = m2 > 0.02 && m2 < 0.98;
-    const f = THREE.MathUtils.clamp((m2 * (1 + SPAN) - SPAN / 2) / 0.88, 0, 1);
+    const span = shatter ? SPAN.shatter : mist ? SPAN.mist : ascend ? SPAN.ascend : SPAN.flow;
+    // 霧化版不用掃描線（輪廓本來就是模糊地凝聚）
+    const on = m2 > 0.02 && m2 < 0.98 && !mist;
+    const f = THREE.MathUtils.clamp((m2 * (1 + span) - span / 2) / 0.88, 0, 1);
     scan.visible = on;
-    scan.position.set(0, data.body.top - data.body.height * f + 0.45, 0.12);
+    if (ascend) {
+      // 昇華版：掃描線由腳下往上，平面上下翻轉讓拖尾留在下方
+      const bottom = data.body.top - data.body.height;
+      scan.scale.set(1, -1, 1);
+      scan.position.set(0, bottom + data.body.height * f - 0.45, 0.12);
+    } else {
+      scan.scale.set(1, 1, 1);
+      scan.position.set(0, data.body.top - data.body.height * f + 0.45, 0.12);
+    }
     sm.uniforms.uAlpha.value = on ? state.opacity : 0;
+
+    // 碎裂版：拼合瞬間的震動與兩道衝擊波
+    const shock = shockRef.current;
+    const shm = shockMatRef.current;
+    if (shatter && shock && shm) {
+      const amp = 0.05 * (bell(m1, 0.8, 0.16) + bell(m2, 0.72, 0.2)) * motion;
+      u.uShake.value.set(Math.sin(t * 91) * amp, Math.cos(t * 77) * amp, Math.sin(t * 63) * amp);
+
+      const q1 = THREE.MathUtils.clamp((m1 - 0.5) / 0.5, 0, 1);
+      const q2 = THREE.MathUtils.clamp((m2 - 0.4) / 0.6, 0, 1);
+      const su = shm.uniforms;
+      su.uR1.value = 0.08 + 0.85 * Math.pow(q1, 0.7);
+      su.uA1.value = q1 > 0 && q1 < 1 ? 0.8 * (1 - q1) * THREE.MathUtils.smoothstep(q1, 0, 0.08) : 0;
+      su.uR2.value = 0.08 + 0.85 * Math.pow(q2, 0.7);
+      su.uA2.value = q2 > 0 && q2 < 1 ? 0.7 * (1 - q2) * THREE.MathUtils.smoothstep(q2, 0, 0.08) : 0;
+      shock.visible = (su.uA1.value as number) > 0.01 || (su.uA2.value as number) > 0.01;
+    }
   });
 
   if (!data) return null;
@@ -115,8 +187,7 @@ export function ImageFigure({ sin, index, state, bodyCount, motion, onReady }: P
           <bufferAttribute attach="attributes-aC2" args={[data.c2, 3]} />
           <bufferAttribute attach="attributes-aDelay" args={[data.delay, 2]} />
           <bufferAttribute attach="attributes-aSeed" args={[data.seed, 1]} />
-          <bufferAttribute attach="attributes-aTone0" args={[data.tone0, 1]} />
-          <bufferAttribute attach="attributes-aKind0" args={[data.kind0, 1]} />
+          <bufferAttribute attach="attributes-aHome" args={[data.home, 1]} />
         </bufferGeometry>
         <shaderMaterial
           ref={matRef}
@@ -141,6 +212,21 @@ export function ImageFigure({ sin, index, state, bodyCount, motion, onReady }: P
           blending={THREE.AdditiveBlending}
         />
       </mesh>
+
+      {shatter && (
+        <mesh ref={shockRef} position={[0, spec?.headCY ?? 0, 0.2]} visible={false}>
+          <planeGeometry args={[10, 10]} />
+          <shaderMaterial
+            ref={shockMatRef}
+            vertexShader={haloVertex}
+            fragmentShader={shockFragment}
+            uniforms={shockUniforms}
+            transparent
+            depthWrite={false}
+            blending={THREE.AdditiveBlending}
+          />
+        </mesh>
+      )}
     </>
   );
 }

@@ -64,10 +64,10 @@ const DEFAULT_TRANSITION: TransitionSpec = { build: 3.0, ready: 1.5 };
 
 export const TRANSITIONS: Record<SinSlug, TransitionSpec> = {
   lust: { build: 6.5, ready: 4.2 },
-  pride: DEFAULT_TRANSITION,
+  pride: { build: 6.0, ready: 3.8 },
   greed: DEFAULT_TRANSITION,
   gluttony: DEFAULT_TRANSITION,
-  sloth: DEFAULT_TRANSITION,
-  wrath: DEFAULT_TRANSITION,
+  sloth: { build: 8.0, ready: 5.0 },
+  wrath: { build: 5.0, ready: 3.2 },
   envy: DEFAULT_TRANSITION,
 };

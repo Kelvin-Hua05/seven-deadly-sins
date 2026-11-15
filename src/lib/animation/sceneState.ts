@@ -10,6 +10,8 @@ export class HeadState {
   opacity = 1;
   /** 身體重建 / 掃描進度 */
   build = 0;
+  /** 插圖頭像接手的程度（0 = 程序化頭，1 = 插圖頭像） */
+  figure = 0;
   lookX = 0;
   lookY = 0;
   targetScale = 1;
@@ -32,6 +34,11 @@ export class HeadState {
   look(x: number, y: number, dt: number) {
     this.lookX = THREE.MathUtils.damp(this.lookX, x, 2.5, dt);
     this.lookY = THREE.MathUtils.damp(this.lookY, y, 2.5, dt);
+  }
+  
+  /** 插圖頭像接手的程度：準備好就漸漸變成 1，否則回到 0 */
+  followFigure(ready: boolean, dt: number) {
+    this.figure = THREE.MathUtils.damp(this.figure, ready ? 1 : 0, 4, dt);
   }
 }
 
