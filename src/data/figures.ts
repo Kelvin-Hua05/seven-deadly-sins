@@ -35,8 +35,11 @@ export interface FigureSpec {
    *   shatter  粒子爆開成碎片，再被拉回、咔地拼合，伴隨衝擊波與震動
    *   mist     粒子失焦成霧、緩慢下垂搖曳，再慢慢對焦成形，成形後仍緩緩下沉
    *   ascend   由中軸線向左右對稱展開、向上升騰；全身由腳下往上撐起，落點閃金光
+   *   gather   周圍的粒子（頭髮、光環、金幣）從遠處被吸進來，落點閃金光；全身階段先向中心收縮再展開
+   *   twin     粒子分裂成兩層錯位的重影，再合而為一；成形後仍殘留一層偏青綠的錯位輪廓
+   *   vortex   粒子由外而內捲成旋渦、被吞進中心，再向外膨脹成形；成形後像不斷膨脹般緩緩起伏
    */
-  variant?: "flow" | "shatter" | "mist" | "ascend";
+  variant?: "flow" | "shatter" | "mist" | "ascend" | "gather" | "twin" | "vortex";
 }
 
 export const FIGURES: Partial<Record<SinSlug, FigureSpec>> = {
@@ -97,5 +100,50 @@ export const FIGURES: Partial<Record<SinSlug, FigureSpec>> = {
     headEdge: 0.5,
     bodyEdge: 0.55,
     variant: "ascend",
+  },
+
+  greed: {
+    headUrl: "/images/figures/greed-head.jpg",
+    bodyUrl: "/images/figures/greed-body.jpg",
+    homeHeight: 2.7,
+    homeCenter: [0.5, 0.28],
+    homeRadius: [0.3, 0.3],
+    headHeight: 2.9,
+    headCY: -0.35,
+    bodyHeight: 3.1,
+    bodyCY: -0.45,
+    headEdge: 0.5,
+    bodyEdge: 0.55,
+    variant: "gather",
+  },
+
+  envy: {
+    headUrl: "/images/figures/envy-head.jpg",
+    bodyUrl: "/images/figures/envy-body.jpg",
+    homeHeight: 2.7,
+    homeCenter: [0.52, 0.32],
+    homeRadius: [0.31, 0.3],
+    headHeight: 2.9,
+    headCY: -0.35,
+    bodyHeight: 3.1,
+    bodyCY: -0.45,
+    headEdge: 0.5,
+    bodyEdge: 0.55,
+    variant: "twin",
+  },
+
+  gluttony: {
+    headUrl: "/images/figures/gluttony-head.jpg",
+    bodyUrl: "/images/figures/gluttony-body.jpg",
+    homeHeight: 2.7,
+    homeCenter: [0.5, 0.25],
+    homeRadius: [0.3, 0.28],
+    headHeight: 2.9,
+    headCY: -0.35,
+    bodyHeight: 3.1,
+    bodyCY: -0.45,
+    headEdge: 0.5,
+    bodyEdge: 0.55,
+    variant: "vortex",
   },
 };

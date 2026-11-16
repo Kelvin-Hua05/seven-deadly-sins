@@ -60,14 +60,13 @@ export interface TransitionSpec {
   build: number;
   ready: number;
 }
-const DEFAULT_TRANSITION: TransitionSpec = { build: 3.0, ready: 1.5 };
 
 export const TRANSITIONS: Record<SinSlug, TransitionSpec> = {
   lust: { build: 6.5, ready: 4.2 },
   pride: { build: 6.0, ready: 3.8 },
-  greed: DEFAULT_TRANSITION,
-  gluttony: DEFAULT_TRANSITION,
+  greed: { build: 5.5, ready: 3.4 },
+  gluttony: { build: 6.5, ready: 4.0 },
   sloth: { build: 8.0, ready: 5.0 },
   wrath: { build: 5.0, ready: 3.2 },
-  envy: DEFAULT_TRANSITION,
+  envy: { build: 6.0, ready: 3.8 },
 };

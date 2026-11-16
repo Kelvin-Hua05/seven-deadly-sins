@@ -205,6 +205,7 @@ export function ParticleHead({
             bodyCount={bodyCount}
             homeDensity={homeDensity}
             motion={motion}
+            eager={withBody}
             onReady={onFigureReady}
           />
         )}

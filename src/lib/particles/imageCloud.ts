@@ -213,6 +213,7 @@ async function buildFigureData(
 
   // 昇華版（傲慢）：特寫由中軸線向左右對稱展開；全身由腳下往上撐起
   const ascend = spec.variant === "ascend";
+  const gather = spec.variant === "gather";
   const bottom = spec.bodyCY - spec.bodyHeight / 2;
   const headTop = spec.headCY + spec.headHeight / 2;
   const halfW = (head.aspect * spec.headHeight) / 2;
@@ -229,6 +230,11 @@ async function buildFigureData(
         sd * 0.1;
       delay[i * 2 + 1] =
         clamp((p2[i * 3 + 1] - bottom) / spec.bodyHeight) * 0.88 + sd * 0.12;
+    } else if (gather) {
+      // 吸附版（貪婪）：各處的粒子幾乎隨機地先後被吸進來
+      delay[i * 2] = sd * 0.85 + clamp(Math.hypot(dx, dy) / faceR) * 0.15;
+      delay[i * 2 + 1] =
+        sd * 0.85 + clamp((top - p2[i * 3 + 1]) / spec.bodyHeight) * 0.15;
     } else {
       // 第一階段：從臉中心向外綻開
       delay[i * 2] = clamp(Math.hypot(dx, dy) / faceR) * 0.8 + sd * 0.2;
