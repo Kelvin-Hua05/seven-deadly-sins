@@ -23,7 +23,10 @@ export const AUDIO_FILES: {
 } = {
   home: "/audio/home.mp3",
   ambient: "/audio/ambient.mp3",
-  perSin: {},
+  perSin: {
+    envy: "/audio/envy.mp3",
+    wrath: "/audio/wrath.mp3",
+  },
   cues: {},
 };
 
@@ -33,6 +36,8 @@ export const AUDIO_FILES: {
  */
 export const LOOP_POINTS: Record<string, { start: number; end: number }> = {
   "/audio/home.mp3": { start: 5.0, end: 11.92 },
+  "/audio/envy.mp3": { start: 4.28, end: 20.183 },
+  "/audio/wrath.mp3": { start: 3.01, end: 16.495 },
 };
 
 export interface SynthVoice {

@@ -14,7 +14,8 @@ const MASTER_LEVEL = 0.8;
 const SYNTH_LEVEL = 0.22;
 const FILE_LEVEL = 0.7;
 const MELODY_LEVEL = 0.5;
-
+/** 設成 false 可關閉所有提示音（點擊、揭示等的短音效） */
+const CUES_ENABLED: boolean = true;
 const MAX_OSC = 4;
 const DETUNE = [0, 7, -6, 4];
 
@@ -214,8 +215,7 @@ class AudioEngine {
   }
 
   cue(name: CueName) {
-    return;
-    if (!this.g || !this.on) return;
+    if (!this.g || !this.on || !CUES_ENABLED) return;
     const url = AUDIO_FILES.cues[name];
     if (url) {
       void this.load(url).then((buf) => {
