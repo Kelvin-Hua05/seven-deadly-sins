@@ -14,13 +14,25 @@ export type CueName = "enter" | "scan" | "reveal" | "leave";
  *   cues: { enter: "/audio/enter.mp3" },
  */
 export const AUDIO_FILES: {
+  /** 首頁（封面）專用；沒填就用 ambient */
+  home: string | null;
+  /** 所有場景共用；角色沒有專屬檔案時使用 */
   ambient: string | null;
   perSin: Partial<Record<SinSlug, string>>;
   cues: Partial<Record<CueName, string>>;
 } = {
-  ambient: null,
+  home: "/audio/home.mp3",
+  ambient: "/audio/ambient.mp3",
   perSin: {},
   cues: {},
+};
+
+/**
+ * 「開場 + 循環」的檔案：開場播一次，之後只循環 [start, end]（單位：秒）。
+ * 沒有列在這裡的檔案，則整段循環。
+ */
+export const LOOP_POINTS: Record<string, { start: number; end: number }> = {
+  "/audio/home.mp3": { start: 5.0, end: 11.92 },
 };
 
 export interface SynthVoice {

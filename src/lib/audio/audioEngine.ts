@@ -1,12 +1,12 @@
-import { MELODY, noteFreq } from "@/data/melody";
-
 import {
   AUDIO_FILES,
   HOME_VOICE,
+  LOOP_POINTS,
   SIN_VOICES,
   type CueName,
   type SynthVoice,
 } from "@/data/audio";
+import { MELODY, noteFreq } from "@/data/melody";
 import type { SinSlug } from "@/types/sin";
 
 /** 音量都在這裡調 */
@@ -57,6 +57,8 @@ class AudioEngine {
   private scene: SinSlug | null = null;
   private fileLayer: FileLayer | null = null;
   private fileToken = 0;
+  /** 已經播過開場的檔案：再次進入時直接從循環段開始 */
+  private introDone = new Set<string>();
   private buffers = new Map<string, Promise<AudioBuffer | null>>();
   private suspendTimer: ReturnType<typeof setTimeout> | null = null;
   private listeners = new Set<() => void>();
@@ -106,7 +108,8 @@ class AudioEngine {
       echoLp.connect(master);
 
       const synth = ctx.createGain();
-      synth.gain.value = SYNTH_LEVEL;
+      // 有真實音檔時，一開始就不出聲；音檔載入失敗時 setFileLayer 會自動把它恢復
+      synth.gain.value = AUDIO_FILES.home || AUDIO_FILES.ambient ? 0 : SYNTH_LEVEL;
       synth.connect(master);
 
       const filter = ctx.createBiquadFilter();
@@ -188,7 +191,7 @@ class AudioEngine {
     void g.ctx.resume();
     g.master.gain.setTargetAtTime(MASTER_LEVEL, g.ctx.currentTime, 0.4);
     this.applyScene(first ? 0.01 : 1.2);
-    this.startMelody();
+    // this.startMelody();
     this.emit();
   }
 
@@ -211,6 +214,7 @@ class AudioEngine {
   }
 
   cue(name: CueName) {
+    return;
     if (!this.g || !this.on) return;
     const url = AUDIO_FILES.cues[name];
     if (url) {
@@ -242,8 +246,9 @@ class AudioEngine {
 
   private applyScene(tc: number) {
     this.applyVoice(this.scene ? SIN_VOICES[this.scene] : HOME_VOICE, tc);
-    const url =
-      (this.scene && AUDIO_FILES.perSin[this.scene]) || AUDIO_FILES.ambient;
+    const url = this.scene
+      ? AUDIO_FILES.perSin[this.scene] || AUDIO_FILES.ambient
+      : AUDIO_FILES.home || AUDIO_FILES.ambient;
     this.setFileLayer(url ?? null);
   }
 
@@ -357,11 +362,20 @@ class AudioEngine {
       const src = cur.ctx.createBufferSource();
       src.buffer = buf;
       src.loop = true;
+      // 「開場 + 循環」：開場只在第一次進入時播放，之後直接從循環段開始
+      const lp = LOOP_POINTS[url];
+      let offset = 0;
+      if (lp) {
+        src.loopStart = lp.start;
+        src.loopEnd = lp.end;
+        if (this.introDone.has(url)) offset = lp.start;
+        this.introDone.add(url);
+      }
       const gain = cur.ctx.createGain();
       gain.gain.value = 0;
       src.connect(gain);
       gain.connect(cur.master);
-      src.start();
+      src.start(0, offset);
       gain.gain.setTargetAtTime(FILE_LEVEL, t, 0.8);
       cur.synth.gain.setTargetAtTime(0, t, 0.8);
       this.fileLayer = { url, src, gain };
