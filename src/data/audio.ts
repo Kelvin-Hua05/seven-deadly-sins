@@ -26,6 +26,9 @@ export const AUDIO_FILES: {
   perSin: {
     envy: "/audio/envy.mp3",
     wrath: "/audio/wrath.mp3",
+    greed: "/audio/greed.mp3",
+    lust: "/audio/lust.mp3",
+    pride: "/audio/pride.mp3",
   },
   cues: {},
 };
@@ -38,6 +41,9 @@ export const LOOP_POINTS: Record<string, { start: number; end: number }> = {
   "/audio/home.mp3": { start: 5.0, end: 11.92 },
   "/audio/envy.mp3": { start: 4.28, end: 20.183 },
   "/audio/wrath.mp3": { start: 3.01, end: 16.495 },
+  "/audio/greed.mp3": { start: 4.63, end: 17.34 },
+  "/audio/lust.mp3": { start: 2.78, end: 13.555 },
+  "/audio/pride.mp3": { start: 4.4, end: 14.6 },
 };
 
 export interface SynthVoice {

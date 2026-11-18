@@ -490,8 +490,7 @@ class AudioEngine {
         this.noiseSweep(out, 2200, 180, 1.4, 0.26);
         break;
       case "scan":
-        this.tone(out, 120, 700, 3.0, 0.05, "sawtooth");
-        this.noiseSweep(out, 1500, 4000, 3.0, 0.04);
+        // 已移除：重建時不再播放掃描音效
         break;
       case "reveal":
         this.tone(out, root * 4, root * 4, 3.2, 0.07, "sine");
