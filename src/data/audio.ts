@@ -29,8 +29,13 @@ export const AUDIO_FILES: {
     greed: "/audio/greed.mp3",
     lust: "/audio/lust.mp3",
     pride: "/audio/pride.mp3",
+    sloth: "/audio/sloth.mp3",
   },
-  cues: {},
+  cues: {
+    enter: "/audio/cue-enter.mp3",
+    reveal: "/audio/cue-reveal.mp3",
+    leave: "/audio/cue-leave.mp3",
+  },
 };
 
 /**
@@ -44,6 +49,7 @@ export const LOOP_POINTS: Record<string, { start: number; end: number }> = {
   "/audio/greed.mp3": { start: 4.63, end: 17.34 },
   "/audio/lust.mp3": { start: 2.78, end: 13.555 },
   "/audio/pride.mp3": { start: 4.4, end: 14.6 },
+  "/audio/sloth.mp3": { start: 4.0, end: 16.0 },
 };
 
 export interface SynthVoice {

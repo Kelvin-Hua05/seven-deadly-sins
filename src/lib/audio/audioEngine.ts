@@ -11,11 +11,13 @@ import type { SinSlug } from "@/types/sin";
 
 /** 音量都在這裡調 */
 const MASTER_LEVEL = 0.8;
-const SYNTH_LEVEL = 0.22;
+const SYNTH_LEVEL = 0;
 const FILE_LEVEL = 0.7;
 const MELODY_LEVEL = 0.5;
 /** 設成 false 可關閉所有提示音（點擊、揭示等的短音效） */
 const CUES_ENABLED: boolean = true;
+/** 是否使用程式合成的聲音；false = 全部只用 mp3 */
+const USE_SYNTH: boolean = false;
 const MAX_OSC = 4;
 const DETUNE = [0, 7, -6, 4];
 
@@ -477,6 +479,7 @@ class AudioEngine {
   }
 
   private synthCue(name: CueName) {
+    if (!USE_SYNTH) return;
     const g = this.g;
     if (!g) return;
     const out = g.master;
