@@ -13,6 +13,8 @@ import type { SinSlug } from "@/types/sin";
 const MASTER_LEVEL = 0.8;
 const SYNTH_LEVEL = 0;
 const FILE_LEVEL = 0.7;
+/** 切換音樂時的交叉淡化秒數：舊的漸小、新的漸大（等功率曲線） */
+const CROSSFADE_S = 2.5;
 const MELODY_LEVEL = 0.5;
 /** 設成 false 可關閉所有提示音（點擊、揭示等的短音效） */
 const CUES_ENABLED: boolean = true;
@@ -57,6 +59,7 @@ function makeNoise(ctx: AudioContext): AudioBuffer {
 class AudioEngine {
   private g: Graph | null = null;
   private on = false;
+  private preloaded = false;
   private scene: SinSlug | null = null;
   private fileLayer: FileLayer | null = null;
   private fileToken = 0;
@@ -194,6 +197,7 @@ class AudioEngine {
     void g.ctx.resume();
     g.master.gain.setTargetAtTime(MASTER_LEVEL, g.ctx.currentTime, 0.4);
     this.applyScene(first ? 0.01 : 1.2);
+    this.preloadAll();
     // this.startMelody();
     this.emit();
   }
@@ -325,42 +329,57 @@ class AudioEngine {
     };
   }
     
+  /** 等功率淡化曲線：rising = true 漸大，false 漸小 */
+  private fadeCurve(peak: number, rising: boolean): Float32Array {
+    const n = 64;
+    const c = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const t = i / (n - 1);
+      c[i] = peak * (rising ? Math.sin((t * Math.PI) / 2) : Math.cos((t * Math.PI) / 2));
+    }
+    return c;
+  }
+
+  private fadeOutLayer(layer: FileLayer, now: number) {
+    const cur = layer.gain.gain.value;
+    layer.gain.gain.cancelScheduledValues(now);
+    layer.gain.gain.setValueAtTime(cur, now);
+    layer.gain.gain.setValueCurveAtTime(this.fadeCurve(cur, false), now, CROSSFADE_S);
+    window.setTimeout(() => {
+      try {
+        layer.src.stop();
+      } catch {
+        /* 已停止 */
+      }
+      layer.src.disconnect();
+      layer.gain.disconnect();
+    }, (CROSSFADE_S + 0.5) * 1000);
+  }
+
   private setFileLayer(url: string | null) {
     const g = this.g;
     if (!g) return;
     if (this.fileLayer && this.fileLayer.url === url) return;
     const token = ++this.fileToken;
-    const now = g.ctx.currentTime;
 
-    const old = this.fileLayer;
-    this.fileLayer = null;
-    if (old) {
-      old.gain.gain.setTargetAtTime(0, now, 0.6);
-      setTimeout(() => {
-        try {
-          old.src.stop();
-        } catch {
-          /* 已停止 */
-        }
-        old.src.disconnect();
-        old.gain.disconnect();
-      }, 3000);
-    }
-
+    // 沒有要播的檔案：舊的音樂漸漸淡出
     if (!url) {
-      g.synth.gain.setTargetAtTime(SYNTH_LEVEL, now, 0.8);
+      const old = this.fileLayer;
+      this.fileLayer = null;
+      if (old) this.fadeOutLayer(old, g.ctx.currentTime);
       return;
     }
 
+    // 等新音樂載入、解碼完成，再讓「舊的漸小」與「新的漸大」同一刻開始，
+    // 這樣中間不會有空檔，也不會有音量凹陷
     void this.load(url).then((buf) => {
       const cur = this.g;
-      if (token !== this.fileToken || !cur) return;
+      if (token !== this.fileToken || !cur || !buf) return;
       const t = cur.ctx.currentTime;
-      if (!buf) {
-        // 檔案載入失敗：退回合成音
-        cur.synth.gain.setTargetAtTime(SYNTH_LEVEL, t, 0.8);
-        return;
-      }
+
+      const old = this.fileLayer;
+      if (old) this.fadeOutLayer(old, t);
+
       const src = cur.ctx.createBufferSource();
       src.buffer = buf;
       src.loop = true;
@@ -374,13 +393,30 @@ class AudioEngine {
         this.introDone.add(url);
       }
       const gain = cur.ctx.createGain();
-      gain.gain.value = 0;
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.setValueCurveAtTime(this.fadeCurve(FILE_LEVEL, true), t, CROSSFADE_S);
       src.connect(gain);
       gain.connect(cur.master);
       src.start(0, offset);
-      gain.gain.setTargetAtTime(FILE_LEVEL, t, 0.8);
-      cur.synth.gain.setTargetAtTime(0, t, 0.8);
       this.fileLayer = { url, src, gain };
+    });
+  }
+
+  /** 開啟聲音後，在背景把所有音檔依序載入解碼，切換時才不會有等待 */
+  private preloadAll() {
+    if (this.preloaded) return;
+    this.preloaded = true;
+    const urls = new Set<string>();
+    if (AUDIO_FILES.home) urls.add(AUDIO_FILES.home);
+    if (AUDIO_FILES.ambient) urls.add(AUDIO_FILES.ambient);
+    for (const u of Object.values(AUDIO_FILES.perSin)) if (u) urls.add(u);
+    for (const u of Object.values(AUDIO_FILES.cues)) if (u) urls.add(u);
+    let i = 0;
+    urls.forEach((u) => {
+      window.setTimeout(() => {
+        if (this.g) void this.load(u);
+      }, 1500 + i * 700);
+      i++;
     });
   }
 

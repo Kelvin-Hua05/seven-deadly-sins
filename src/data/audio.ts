@@ -30,6 +30,7 @@ export const AUDIO_FILES: {
     lust: "/audio/lust.mp3",
     pride: "/audio/pride.mp3",
     sloth: "/audio/sloth.mp3",
+    gluttony: "/audio/gluttony.mp3",
   },
   cues: {
     enter: "/audio/cue-enter.mp3",
@@ -50,6 +51,7 @@ export const LOOP_POINTS: Record<string, { start: number; end: number }> = {
   "/audio/lust.mp3": { start: 2.78, end: 13.555 },
   "/audio/pride.mp3": { start: 4.4, end: 14.6 },
   "/audio/sloth.mp3": { start: 4.0, end: 16.0 },
+  "/audio/gluttony.mp3": { start: 3.1, end: 11.48 },
 };
 
 export interface SynthVoice {
