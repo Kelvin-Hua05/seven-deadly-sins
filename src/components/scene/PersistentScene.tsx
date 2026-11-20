@@ -11,6 +11,7 @@ import { audio } from "@/lib/audio/audioEngine";
 import { isWebGLAvailable } from "@/lib/webgl";
 import { LoadingIndicator } from "@/components/ui/LoadingIndicator";
 import { SceneErrorBoundary } from "./SceneErrorBoundary";
+import type { SinSlug } from "@/types/sin";
 
 const MainScene = dynamic(() => import("./MainScene"), {
   ssr: false,
@@ -58,6 +59,8 @@ export function PersistentScene() {
   // 點擊後稍等一下再換網址，讓頭先開始移動
   const onEnter = useCallback(
     (target: string) => {
+      // 一點擊就開始切換音樂：首頁先漸弱，約 1 秒後對應的音樂漸強
+      audio.setScene(target as SinSlug);
       window.setTimeout(
         () => router.push(`/sins/${target}`),
         reduced ? 100 : 550

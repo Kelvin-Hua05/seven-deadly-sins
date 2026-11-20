@@ -13,11 +13,15 @@ import type { SinSlug } from "@/types/sin";
 const MASTER_LEVEL = 0.8;
 const SYNTH_LEVEL = 0;
 const FILE_LEVEL = 0.7;
-/** 切換音樂時的交叉淡化秒數：舊的漸小、新的漸大（等功率曲線） */
-const CROSSFADE_S = 2.5;
+/** 舊音樂淡出的秒數 */
+const FADE_OUT_S = 1.5;
+/** 新音樂淡入的秒數 */
+const FADE_IN_S = 2.0;
+/** 舊音樂開始淡出後，等多久新音樂才開始淡入 */
+const SWITCH_GAP_S = 1.0;
 const MELODY_LEVEL = 0.5;
 /** 設成 false 可關閉所有提示音（點擊、揭示等的短音效） */
-const CUES_ENABLED: boolean = true;
+const CUES_ENABLED: boolean = false;
 /** 是否使用程式合成的聲音；false = 全部只用 mp3 */
 const USE_SYNTH: boolean = false;
 const MAX_OSC = 4;
@@ -60,6 +64,7 @@ class AudioEngine {
   private g: Graph | null = null;
   private on = false;
   private preloaded = false;
+  private desiredUrl: string | null = null;
   private scene: SinSlug | null = null;
   private fileLayer: FileLayer | null = null;
   private fileToken = 0;
@@ -344,7 +349,7 @@ class AudioEngine {
     const cur = layer.gain.gain.value;
     layer.gain.gain.cancelScheduledValues(now);
     layer.gain.gain.setValueAtTime(cur, now);
-    layer.gain.gain.setValueCurveAtTime(this.fadeCurve(cur, false), now, CROSSFADE_S);
+    layer.gain.gain.setValueCurveAtTime(this.fadeCurve(cur, false), now, FADE_OUT_S);
     window.setTimeout(() => {
       try {
         layer.src.stop();
@@ -353,52 +358,55 @@ class AudioEngine {
       }
       layer.src.disconnect();
       layer.gain.disconnect();
-    }, (CROSSFADE_S + 0.5) * 1000);
+    }, (FADE_OUT_S + 0.5) * 1000);
+  }
+
+  private startLayer(url: string, buf: AudioBuffer) {
+    const cur = this.g;
+    if (!cur) return;
+    const t = cur.ctx.currentTime;
+    const src = cur.ctx.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    // 「開場 + 循環」：開場只在第一次進入時播放，之後直接從循環段開始
+    const lp = LOOP_POINTS[url];
+    let offset = 0;
+    if (lp) {
+      src.loopStart = lp.start;
+      src.loopEnd = lp.end;
+      if (this.introDone.has(url)) offset = lp.start;
+      this.introDone.add(url);
+    }
+    const gain = cur.ctx.createGain();
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.setValueCurveAtTime(this.fadeCurve(FILE_LEVEL, true), t, FADE_IN_S);
+    src.connect(gain);
+    gain.connect(cur.master);
+    src.start(0, offset);
+    this.fileLayer = { url, src, gain };
   }
 
   private setFileLayer(url: string | null) {
     const g = this.g;
     if (!g) return;
-    if (this.fileLayer && this.fileLayer.url === url) return;
+    if (url === this.desiredUrl) return;
+    this.desiredUrl = url;
     const token = ++this.fileToken;
 
-    // 沒有要播的檔案：舊的音樂漸漸淡出
-    if (!url) {
-      const old = this.fileLayer;
-      this.fileLayer = null;
-      if (old) this.fadeOutLayer(old, g.ctx.currentTime);
-      return;
-    }
+    // 舊音樂立刻開始漸漸變小
+    const old = this.fileLayer;
+    this.fileLayer = null;
+    if (old) this.fadeOutLayer(old, g.ctx.currentTime);
+    if (!url) return;
 
-    // 等新音樂載入、解碼完成，再讓「舊的漸小」與「新的漸大」同一刻開始，
-    // 這樣中間不會有空檔，也不會有音量凹陷
+    // 新音樂：舊的開始變小之後，等一下再漸漸變大（第一次播放則不用等）
+    const wait = old ? SWITCH_GAP_S : 0;
     void this.load(url).then((buf) => {
-      const cur = this.g;
-      if (token !== this.fileToken || !cur || !buf) return;
-      const t = cur.ctx.currentTime;
-
-      const old = this.fileLayer;
-      if (old) this.fadeOutLayer(old, t);
-
-      const src = cur.ctx.createBufferSource();
-      src.buffer = buf;
-      src.loop = true;
-      // 「開場 + 循環」：開場只在第一次進入時播放，之後直接從循環段開始
-      const lp = LOOP_POINTS[url];
-      let offset = 0;
-      if (lp) {
-        src.loopStart = lp.start;
-        src.loopEnd = lp.end;
-        if (this.introDone.has(url)) offset = lp.start;
-        this.introDone.add(url);
-      }
-      const gain = cur.ctx.createGain();
-      gain.gain.setValueAtTime(0, t);
-      gain.gain.setValueCurveAtTime(this.fadeCurve(FILE_LEVEL, true), t, CROSSFADE_S);
-      src.connect(gain);
-      gain.connect(cur.master);
-      src.start(0, offset);
-      this.fileLayer = { url, src, gain };
+      if (token !== this.fileToken || !buf) return;
+      window.setTimeout(() => {
+        if (token !== this.fileToken) return;
+        this.startLayer(url, buf);
+      }, wait * 1000);
     });
   }
 

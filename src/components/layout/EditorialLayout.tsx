@@ -5,11 +5,12 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import gsap from "gsap";
 import { ArrowLeft, ArrowRight } from "lucide-react";
-import type { Sin } from "@/types/sin";
+import type { Sin, SinSlug } from "@/types/sin";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { useSceneSignal } from "@/hooks/useSceneSignal";
 import { isWebGLAvailable } from "@/lib/webgl";
 import { AudioController } from "@/components/ui/AudioController";
+import { audio } from "@/lib/audio/audioEngine";
 
 interface NavSin {
   slug: string;
@@ -84,6 +85,8 @@ export function EditorialLayout({ sin, prev, next, total }: Props) {
     (href: string) => {
       if (leaving.current) return;
       leaving.current = true;
+      // 一按下去就開始切換音樂：目前的先漸弱，約 1 秒後下一首漸強
+      audio.setScene(href === "/" ? null : (href.split("/")[2] as SinSlug));
       const nodes = rootRef.current?.querySelectorAll(
         "[data-zh],[data-en],[data-line],[data-intro],[data-sub],[data-phrase],[data-fade]"
       );
